@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018.
+ * Copyright (c) 2019.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,41 +16,25 @@
 
 package com.itfsw.mybatis.generator.plugins.utils.hook;
 
-import org.mybatis.generator.api.IntrospectedColumn;
-import org.mybatis.generator.api.dom.xml.Element;
-import org.mybatis.generator.api.dom.xml.XmlElement;
-
-import java.util.List;
+import org.mybatis.generator.api.IntrospectedTable;
+import org.mybatis.generator.api.dom.java.InnerEnum;
+import org.mybatis.generator.api.dom.java.TopLevelClass;
 
 /**
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
  * @author: hewei
- * @time:2018/4/28 17:50
+ * @time:2019/7/5 14:17
  * ---------------------------------------------------------------------------
  */
-public interface IIncrementsPluginHook {
+public interface IModelColumnPluginHook {
     /**
-     * 生成增量操作节点
-     * @param introspectedColumn
-     * @param prefix
-     * @param hasComma
+     * Model Column 枚举生成
+     * @param innerEnum
+     * @param topLevelClass
+     * @param introspectedTable
      * @return
      */
-    List<Element> incrementSetElementGenerated(IntrospectedColumn introspectedColumn, String prefix, boolean hasComma);
-
-    /**
-     * 生成增量操作节点(SelectiveEnhancedPlugin)
-     * @param columns
-     * @return
-     */
-    List<XmlElement> incrementSetsWithSelectiveEnhancedPluginElementGenerated(List<IntrospectedColumn> columns);
-
-    /**
-     * 是否支持increment
-     * @param column
-     * @return
-     */
-    boolean supportIncrement(IntrospectedColumn column);
+    boolean modelColumnEnumGenerated(InnerEnum innerEnum, TopLevelClass topLevelClass, IntrospectedTable introspectedTable);
 }

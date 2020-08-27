@@ -126,7 +126,10 @@ public class ObjectUtil {
     public Object invoke(String methodName, Object... args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         List<Method> methods = getMethods(methodName);
         for (Method method : methods) {
-            if (method.getParameterTypes().length == args.length) {
+            if (method.getParameters().length == 1 && args == null) {
+                method.setAccessible(true);
+                return method.invoke(this.object, new Object[]{null});
+            } else if (method.getParameterTypes().length == args.length) {
                 boolean flag = true;
                 Class[] parameterTypes = method.getParameterTypes();
                 // !! mapper动态代理后VarArgs检查有问题
@@ -134,7 +137,7 @@ public class ObjectUtil {
                 int check = parameterTypes.length > 0 ? parameterTypes.length - (parameterTypes[parameterTypes.length - 1].getName().startsWith("[") ? 1 : 0) : 0;
                 for (int i = 0; i < check; i++) {
                     Class parameterType = parameterTypes[i];
-                    if (!(parameterType.isAssignableFrom(args[i].getClass()))) {
+                    if (args[i] != null && !(parameterType.isAssignableFrom(args[i].getClass()))) {
                         flag = false;
                     }
                     // 基础类型

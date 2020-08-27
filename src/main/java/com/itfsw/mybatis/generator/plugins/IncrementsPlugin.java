@@ -43,6 +43,7 @@ import java.util.List;
  * @time:2017/6/19 15:20
  * ---------------------------------------------------------------------------
  */
+@Deprecated
 public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginHook, IIncrementsPluginHook, ILombokPluginHook {
     public static final String PRO_INCREMENTS_COLUMNS = "incrementsColumns";  // incrementsColumns property
     public static final String FIELD_INC_MAP = "incrementsColumnsInfoMap";    // 为了防止和用户数据库字段冲突，特殊命名
@@ -64,6 +65,12 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
         // 插件使用前提是使用了ModelBuilderPlugin插件
         if (!(PluginTools.checkDependencyPlugin(getContext(), ModelBuilderPlugin.class) || PluginTools.checkDependencyPlugin(getContext(), LombokPlugin.class))) {
             warnings.add("itfsw:插件" + this.getClass().getTypeName() + "插件需配合" + ModelBuilderPlugin.class.getTypeName() + "或者" + LombokPlugin.class.getTypeName() + "插件使用！");
+            return false;
+        }
+
+        // 插件使用前提是使用了ModelBuilderPlugin插件
+        if (PluginTools.checkDependencyPlugin(getContext(), IncrementPlugin.class)) {
+            warnings.add("itfsw:插件" + this.getClass().getTypeName() + "插件和" + IncrementPlugin.class.getTypeName() + "插件冲突！");
             return false;
         }
 
@@ -171,18 +178,18 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
     // =============================================== ILombokPluginHook ===================================================
 
     @Override
-    public boolean modelBaseRecordBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
-        return this.lombokBuilderClassGenerated(topLevelClass, columns, introspectedTable);
+    public boolean modelBaseRecordBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return this.lombokBuilderClassGenerated(topLevelClass, IntrospectedTableTools.getModelBaseRecordClomns(introspectedTable), introspectedTable);
     }
 
     @Override
-    public boolean modelPrimaryKeyBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
-        return this.lombokBuilderClassGenerated(topLevelClass, columns, introspectedTable);
+    public boolean modelPrimaryKeyBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return this.lombokBuilderClassGenerated(topLevelClass, introspectedTable.getPrimaryKeyColumns(), introspectedTable);
     }
 
     @Override
-    public boolean modelRecordWithBLOBsBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
-        return this.lombokBuilderClassGenerated(topLevelClass, columns, introspectedTable);
+    public boolean modelRecordWithBLOBsBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return this.lombokBuilderClassGenerated(topLevelClass, introspectedTable.getBLOBColumns(), introspectedTable);
     }
 
     /**
@@ -196,7 +203,7 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
         if (this.support()) {
             boolean find = false;
             for (IntrospectedColumn column : columns) {
-                if (this.supportColumn(column)) {
+                if (this.supportIncrement(column)) {
                     find = true;
                     break;
                 }
@@ -253,16 +260,16 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
                 }
 
                 // 类注解
-                topLevelClass.addImportedType(LombokPlugin.EnumLombokAnnotations.SETTER.getClazz());
-                builderCls.addAnnotation(LombokPlugin.EnumLombokAnnotations.SETTER.getAnnotation());
-                topLevelClass.addImportedType(LombokPlugin.EnumLombokAnnotations.ACCESSORS_FLUENT_TRUE.getClazz());
-                builderCls.addAnnotation(LombokPlugin.EnumLombokAnnotations.ACCESSORS_FLUENT_TRUE.getAnnotation());
+                topLevelClass.addImportedType("lombok.Setter");
+                builderCls.addAnnotation("@Setter");
+                topLevelClass.addImportedType("lombok.experimental.Accessors");
+                builderCls.addAnnotation("@Accessors(fluent = true)");
                 if (topLevelClass.getSuperClass() != null) {
-                    topLevelClass.addImportedType(LombokPlugin.EnumLombokAnnotations.TO_STRING_CALL_SUPER.getClazz());
-                    builderCls.addAnnotation(LombokPlugin.EnumLombokAnnotations.TO_STRING_CALL_SUPER.getAnnotation());
+                    topLevelClass.addImportedType("lombok.ToString");
+                    builderCls.addAnnotation("@ToString(callSuper = true)");
                 } else {
-                    topLevelClass.addImportedType(LombokPlugin.EnumLombokAnnotations.TO_STRING.getClazz());
-                    builderCls.addAnnotation(LombokPlugin.EnumLombokAnnotations.TO_STRING.getAnnotation());
+                    topLevelClass.addImportedType("lombok.ToString");
+                    builderCls.addAnnotation("@ToString");
                 }
 
 
@@ -323,7 +330,7 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
                 FullyQualifiedJavaType builderType2 = new FullyQualifiedJavaType(topLevelClass.getType().getShortName() + "." + topLevelClass.getType().getShortName() + "Builder");
                 builderType2.addTypeArgument(new SpecTypeArgumentsFullyQualifiedJavaType("<C, B>"));
                 for (IntrospectedColumn column : columns) {
-                    if (this.supportColumn(column)) {
+                    if (this.supportIncrement(column)) {
                         Field field = JavaBeansUtil.getJavaBeansField(column, context, introspectedTable);
                         // 增加方法
                         Method mIncrements = JavaElementGeneratorTools.generateMethod(
@@ -406,7 +413,7 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
 
             // Builder 中 添加字段支持
             for (IntrospectedColumn column : columns) {
-                if (this.supportColumn(column)) {
+                if (this.supportIncrement(column)) {
                     Field field = JavaBeansUtil.getJavaBeansField(column, context, introspectedTable);
                     // 增加方法
                     Method mIncrements = JavaElementGeneratorTools.generateMethod(
@@ -457,7 +464,7 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
     public List<Element> incrementSetElementGenerated(IntrospectedColumn introspectedColumn, String prefix, boolean hasComma) {
         List<Element> list = new ArrayList<>();
 
-        if (this.supportColumn(introspectedColumn)) {
+        if (this.supportIncrement(introspectedColumn)) {
             // 1. column = 节点
             list.add(new TextElement(MyBatis3FormattingUtilities.getEscapedColumnName(introspectedColumn) + " = "));
 
@@ -499,50 +506,50 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
 
     /**
      * 生成增量操作节点(SelectiveEnhancedPlugin)
-     * @param versionColumn 需要排除的column（主要是和乐观锁插件整合时要把版本列排除掉）
+     * @param columns
      * @return
      */
     @Override
-    public Element incrementSetsWithSelectiveEnhancedPluginElementGenerated(IntrospectedColumn versionColumn) {
+    public List<XmlElement> incrementSetsWithSelectiveEnhancedPluginElementGenerated(List<IntrospectedColumn> columns) {
         if (this.support()) {
-            XmlElement choose = new XmlElement("choose");
+            List<XmlElement> results = new ArrayList<>();
 
-            for (IntrospectedColumn introspectedColumn : this.incColumns) {
-                if (versionColumn == null || !introspectedColumn.getActualColumnName().equals(versionColumn.getActualColumnName())) {
-                    XmlElement when = new XmlElement("when");
+            for (IntrospectedColumn incColumn : this.incColumns) {
 
-                    // 需要 inc 的列
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("'");
-                    sb.append(introspectedColumn.getActualColumnName());
-                    sb.append("'.toString()");
-                    sb.append(" == ");
-                    sb.append("column.value");
+                // !!! 不能用contains,IntrospectedColumn对象不同
+                for (IntrospectedColumn column : columns) {
+                    if (incColumn.getActualColumnName().equals(column.getActualColumnName())) {
+                        XmlElement when = new XmlElement("when");
 
-                    when.addAttribute(new Attribute("test", sb.toString()));
-                    when.addElement(new TextElement("${column.escapedColumnName} = ${column.escapedColumnName} ${record." + METHOD_GET_INC_MAP + "()."
-                            + introspectedColumn.getActualColumnName()
-                            + ".value} #{record.${column.javaProperty},jdbcType=${column.jdbcType}}"));
-                    choose.addElement(when);
+                        // 需要 inc 的列
+                        when.addAttribute(new Attribute("test", "'" + column.getActualColumnName() + "'.toString() == column.value"));
+                        when.addElement(new TextElement("${column.escapedColumnName} = ${column.escapedColumnName} ${record." + METHOD_GET_INC_MAP + "()."
+                                + incColumn.getActualColumnName()
+                                + ".value} "
+                                + XmlElementGeneratorTools.getParameterClause("record.${column.javaProperty}", incColumn)));
+                        results.add(when);
+                    }
                 }
             }
 
-            if (versionColumn == null) {
-                XmlElement otherwise = new XmlElement("otherwise");
-                otherwise.addElement(new TextElement("${column.escapedColumnName} = #{record.${column.javaProperty},jdbcType=${column.jdbcType}}"));
-                choose.addElement(otherwise);
-            } else {
-                XmlElement when = new XmlElement("when");
-                when.addAttribute(new Attribute("test", "column.value != '" + versionColumn.getActualColumnName() + "'.toString()"));
-
-                when.addElement(new TextElement("${column.escapedColumnName} = #{record.${column.javaProperty},jdbcType=${column.jdbcType}}"));
-
-                choose.addElement(when);
-            }
-
-            return choose;
+            return results.isEmpty() ? null : results;
         }
         return null;
+    }
+
+    /**
+     * 判断是否为需要进行增量操作的column
+     * @param column
+     * @return
+     */
+    @Override
+    public boolean supportIncrement(IntrospectedColumn column) {
+        for (IntrospectedColumn incColumn : this.incColumns) {
+            if (incColumn.getActualColumnName().equals(column.getActualColumnName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // =================================================== 原生方法的支持 ====================================================
@@ -569,8 +576,8 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
         topLevelClass.addImportedType("java.util.HashMap");
         // inc map 获取方法
         if (withLombok) {
-            topLevelClass.addImportedType(LombokPlugin.EnumLombokAnnotations.ACCESSORS_FLUENT_TRUE.getClazz());
-            fIncrements.addAnnotation(LombokPlugin.EnumLombokAnnotations.ACCESSORS_FLUENT_TRUE.getAnnotation());
+            topLevelClass.addImportedType("lombok.experimental.Accessors");
+            fIncrements.addAnnotation("@Accessors(fluent = true)");
         } else {
             Method getIncMapMethod = JavaElementGeneratorTools.generateMethod(
                     METHOD_GET_INC_MAP,
@@ -713,19 +720,5 @@ public class IncrementsPlugin extends BasePlugin implements IModelBuilderPluginH
      */
     private boolean support() {
         return this.incColumns.size() > 0;
-    }
-
-    /**
-     * 判断是否为需要进行增量操作的column
-     * @param searchColumn
-     * @return
-     */
-    private boolean supportColumn(IntrospectedColumn searchColumn) {
-        for (IntrospectedColumn column : this.incColumns) {
-            if (column.getActualColumnName().equals(searchColumn.getActualColumnName())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

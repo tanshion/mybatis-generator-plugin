@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018.
+ * Copyright (c) 2019.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package com.itfsw.mybatis.generator.plugins.utils.hook;
 
 import org.mybatis.generator.api.IntrospectedColumn;
-import org.mybatis.generator.api.dom.xml.Element;
 import org.mybatis.generator.api.dom.xml.XmlElement;
 
 import java.util.List;
@@ -30,7 +29,7 @@ import java.util.List;
  * @time:2018/4/28 17:50
  * ---------------------------------------------------------------------------
  */
-public interface IIncrementsPluginHook {
+public interface IIncrementPluginHook {
     /**
      * 生成增量操作节点
      * @param introspectedColumn
@@ -38,14 +37,22 @@ public interface IIncrementsPluginHook {
      * @param hasComma
      * @return
      */
-    List<Element> incrementSetElementGenerated(IntrospectedColumn introspectedColumn, String prefix, boolean hasComma);
+    XmlElement generateIncrementSet(IntrospectedColumn introspectedColumn, String prefix, boolean hasComma);
+
+    /**
+     * 生成增量操作节点
+     * @param introspectedColumn
+     * @param prefix
+     * @return
+     */
+    XmlElement generateIncrementSetSelective(IntrospectedColumn introspectedColumn, String prefix);
 
     /**
      * 生成增量操作节点(SelectiveEnhancedPlugin)
      * @param columns
      * @return
      */
-    List<XmlElement> incrementSetsWithSelectiveEnhancedPluginElementGenerated(List<IntrospectedColumn> columns);
+    List<XmlElement> generateIncrementSetForSelectiveEnhancedPlugin(List<IntrospectedColumn> columns);
 
     /**
      * 是否支持increment

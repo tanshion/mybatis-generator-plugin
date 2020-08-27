@@ -21,10 +21,7 @@ import com.itfsw.mybatis.generator.plugins.utils.BeanUtils;
 import org.mybatis.generator.api.IntrospectedColumn;
 import org.mybatis.generator.api.IntrospectedTable;
 import org.mybatis.generator.api.Plugin;
-import org.mybatis.generator.api.dom.java.InnerClass;
-import org.mybatis.generator.api.dom.java.Interface;
-import org.mybatis.generator.api.dom.java.Method;
-import org.mybatis.generator.api.dom.java.TopLevelClass;
+import org.mybatis.generator.api.dom.java.*;
 import org.mybatis.generator.api.dom.xml.Document;
 import org.mybatis.generator.api.dom.xml.Element;
 import org.mybatis.generator.api.dom.xml.XmlElement;
@@ -46,11 +43,13 @@ import java.util.List;
 public class HookAggregator implements IUpsertPluginHook,
         IModelBuilderPluginHook,
         IIncrementsPluginHook,
+        IIncrementPluginHook,
         IOptimisticLockerPluginHook,
         ISelectOneByExamplePluginHook,
         ITableConfigurationHook,
         ILombokPluginHook,
         ILogicalDeletePluginHook,
+        IModelColumnPluginHook,
         ISelectSelectivePluginHook {
 
     protected static final Logger logger = LoggerFactory.getLogger(BasePlugin.class);
@@ -115,12 +114,50 @@ public class HookAggregator implements IUpsertPluginHook,
     }
 
     @Override
-    public Element incrementSetsWithSelectiveEnhancedPluginElementGenerated(IntrospectedColumn versionColumn) {
+    public List<XmlElement> incrementSetsWithSelectiveEnhancedPluginElementGenerated(List<IntrospectedColumn> columns) {
         if (this.getPlugins(IIncrementsPluginHook.class).isEmpty()) {
             return null;
         } else {
-            return this.getPlugins(IIncrementsPluginHook.class).get(0).incrementSetsWithSelectiveEnhancedPluginElementGenerated(versionColumn);
+            return this.getPlugins(IIncrementsPluginHook.class).get(0).incrementSetsWithSelectiveEnhancedPluginElementGenerated(columns);
         }
+    }
+
+    // ============================================= IIncrementPluginHook ==============================================
+
+    @Override
+    public XmlElement generateIncrementSet(IntrospectedColumn introspectedColumn, String prefix, boolean hasComma) {
+        if (this.getPlugins(IIncrementPluginHook.class).isEmpty()) {
+            return null;
+        } else {
+            return this.getPlugins(IIncrementPluginHook.class).get(0).generateIncrementSet(introspectedColumn, prefix, hasComma);
+        }
+    }
+
+    @Override
+    public XmlElement generateIncrementSetSelective(IntrospectedColumn introspectedColumn, String prefix) {
+        if (this.getPlugins(IIncrementPluginHook.class).isEmpty()) {
+            return null;
+        } else {
+            return this.getPlugins(IIncrementPluginHook.class).get(0).generateIncrementSetSelective(introspectedColumn, prefix);
+        }
+    }
+
+    @Override
+    public boolean supportIncrement(IntrospectedColumn column) {
+        if (!this.getPlugins(IIncrementPluginHook.class).isEmpty()) {
+            return this.getPlugins(IIncrementPluginHook.class).get(0).supportIncrement(column);
+        } else if (!this.getPlugins(IIncrementsPluginHook.class).isEmpty()) {
+            return this.getPlugins(IIncrementsPluginHook.class).get(0).supportIncrement(column);
+        }
+        return false;
+    }
+
+    @Override
+    public List<XmlElement> generateIncrementSetForSelectiveEnhancedPlugin(List<IntrospectedColumn> columns) {
+        if (!this.getPlugins(IIncrementPluginHook.class).isEmpty()) {
+            return this.getPlugins(IIncrementPluginHook.class).get(0).generateIncrementSetForSelectiveEnhancedPlugin(columns);
+        }
+        return null;
     }
 
     // ============================================ IModelBuilderPluginHook =============================================
@@ -325,9 +362,9 @@ public class HookAggregator implements IUpsertPluginHook,
 
 
     @Override
-    public boolean modelBaseRecordBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
+    public boolean modelBaseRecordBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
         for (ILombokPluginHook plugin : this.getPlugins(ILombokPluginHook.class)) {
-            if (!plugin.modelBaseRecordBuilderClassGenerated(topLevelClass, columns, introspectedTable)) {
+            if (!plugin.modelBaseRecordBuilderClassGenerated(topLevelClass, introspectedTable)) {
                 return false;
             }
         }
@@ -335,9 +372,9 @@ public class HookAggregator implements IUpsertPluginHook,
     }
 
     @Override
-    public boolean modelPrimaryKeyBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
+    public boolean modelPrimaryKeyBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
         for (ILombokPluginHook plugin : this.getPlugins(ILombokPluginHook.class)) {
-            if (!plugin.modelPrimaryKeyBuilderClassGenerated(topLevelClass, columns, introspectedTable)) {
+            if (!plugin.modelPrimaryKeyBuilderClassGenerated(topLevelClass, introspectedTable)) {
                 return false;
             }
         }
@@ -345,9 +382,9 @@ public class HookAggregator implements IUpsertPluginHook,
     }
 
     @Override
-    public boolean modelRecordWithBLOBsBuilderClassGenerated(TopLevelClass topLevelClass, List<IntrospectedColumn> columns, IntrospectedTable introspectedTable) {
+    public boolean modelRecordWithBLOBsBuilderClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
         for (ILombokPluginHook plugin : this.getPlugins(ILombokPluginHook.class)) {
-            if (!plugin.modelRecordWithBLOBsBuilderClassGenerated(topLevelClass, columns, introspectedTable)) {
+            if (!plugin.modelRecordWithBLOBsBuilderClassGenerated(topLevelClass, introspectedTable)) {
                 return false;
             }
         }
@@ -360,6 +397,18 @@ public class HookAggregator implements IUpsertPluginHook,
     public boolean sqlMapSelectByExampleSelectiveElementGenerated(Document document, XmlElement element, IntrospectedTable introspectedTable) {
         for (ISelectSelectivePluginHook plugin : this.getPlugins(ISelectSelectivePluginHook.class)) {
             if (!plugin.sqlMapSelectByExampleSelectiveElementGenerated(document, element, introspectedTable)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ============================================= IModelColumnPluginHook ==============================================
+
+    @Override
+    public boolean modelColumnEnumGenerated(InnerEnum innerEnum, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        for (IModelColumnPluginHook plugin : this.getPlugins(IModelColumnPluginHook.class)) {
+            if (!plugin.modelColumnEnumGenerated(innerEnum, topLevelClass, introspectedTable)) {
                 return false;
             }
         }

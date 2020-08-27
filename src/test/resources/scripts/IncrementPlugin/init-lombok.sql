@@ -29,6 +29,9 @@ CREATE TABLE `tb` (
 -- ----------------------------
 -- Records of tb
 -- ----------------------------
+INSERT INTO `tb` VALUES ('1', 'fd1', '0');
+INSERT INTO `tb` VALUES ('2', 'fd2', '1');
+INSERT INTO `tb` VALUES ('3', null, '3');
 
 -- ----------------------------
 -- Table structure for tb_keys
@@ -39,28 +42,16 @@ CREATE TABLE `tb_keys` (
   `key2` varchar(255) NOT NULL,
   `field1` varchar(255) DEFAULT NULL COMMENT '注释2',
   `field2` int(11) DEFAULT NULL,
+  `inc_f1` bigint(20) NOT NULL DEFAULT '0',
   PRIMARY KEY (`key1`,`key2`)
 ) ENGINE=MyISAM AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
 
 -- ----------------------------
 -- Records of tb_keys
 -- ----------------------------
-
--- ----------------------------
--- Table structure for tb_key_blob
--- ----------------------------
-DROP TABLE IF EXISTS `tb_key_blob`;
-CREATE TABLE `tb_key_blob` (
-  `id` bigint(20) NOT NULL COMMENT '注释1',
-  `key1` varchar(20) NOT NULL,
-  `field1` longtext COMMENT '注释2',
-  `field2` longtext,
-  PRIMARY KEY (`id`,`key1`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
--- ----------------------------
--- Records of tb_key_blob
--- ----------------------------
+INSERT INTO `tb_keys` VALUES ('1', 'key1', 'fd1', '0', '1');
+INSERT INTO `tb_keys` VALUES ('2', 'key2', 'fd2', '1', '2');
+INSERT INTO `tb_keys` VALUES ('3', 'key3', null, '3', '3');
 
 -- ----------------------------
 -- Table structure for tb_lombok
@@ -70,7 +61,7 @@ CREATE TABLE `tb_lombok` (
   `id` bigint(20) NOT NULL COMMENT '注释1',
   `key1` varchar(20) NOT NULL,
   `field1` varchar(10) COMMENT '注释2',
-  `is_find` tinyint(1),
+  `inc_f1` smallint(3),
   `field3` longtext,
   `field4` longtext,
   PRIMARY KEY (`id`,`key1`)
@@ -79,17 +70,6 @@ CREATE TABLE `tb_lombok` (
 -- ----------------------------
 -- Records of tb_lombok
 -- ----------------------------
-
--- ----------------------------
--- Table structure for tb_only_keys
--- ----------------------------
-DROP TABLE IF EXISTS `tb_only_keys`;
-CREATE TABLE `tb_only_keys` (
-  `key1` bigint(20) NOT NULL,
-  `key2` bigint(20) NOT NULL,
-  PRIMARY KEY (`key1`,`key2`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
--- ----------------------------
--- Records of tb_only_keys
--- ----------------------------
+INSERT INTO `tb_lombok` VALUES ('1', 'key1', 'fd1', '0', 'xx1', null);
+INSERT INTO `tb_lombok` VALUES ('2', 'key2', 'fd2', '1', 'xx2', 'ss2');
+INSERT INTO `tb_lombok` VALUES ('3', 'key3', null, '3', 'xx3', null);

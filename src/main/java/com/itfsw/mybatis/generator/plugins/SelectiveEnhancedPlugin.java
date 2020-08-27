@@ -17,6 +17,7 @@
 package com.itfsw.mybatis.generator.plugins;
 
 import com.itfsw.mybatis.generator.plugins.utils.*;
+import com.itfsw.mybatis.generator.plugins.utils.hook.IIncrementPluginHook;
 import com.itfsw.mybatis.generator.plugins.utils.hook.IIncrementsPluginHook;
 import com.itfsw.mybatis.generator.plugins.utils.hook.IOptimisticLockerPluginHook;
 import com.itfsw.mybatis.generator.plugins.utils.hook.IUpsertPluginHook;
@@ -27,12 +28,13 @@ import org.mybatis.generator.api.dom.java.Interface;
 import org.mybatis.generator.api.dom.java.Method;
 import org.mybatis.generator.api.dom.java.Parameter;
 import org.mybatis.generator.api.dom.xml.Attribute;
-import org.mybatis.generator.api.dom.xml.Element;
 import org.mybatis.generator.api.dom.xml.TextElement;
 import org.mybatis.generator.api.dom.xml.XmlElement;
 import org.mybatis.generator.codegen.mybatis3.ListUtilities;
 import org.mybatis.generator.config.GeneratedKey;
+import org.mybatis.generator.internal.util.StringUtility;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -494,21 +496,63 @@ public class SelectiveEnhancedPlugin extends BasePlugin implements IUpsertPlugin
         setForeachEle.addAttribute(new Attribute("item", "column"));
         setForeachEle.addAttribute(new Attribute("separator", ","));
 
-        Element incrementEle = PluginTools.getHook(IIncrementsPluginHook.class).incrementSetsWithSelectiveEnhancedPluginElementGenerated(versionColumn);
-        // 普通情况
-        if (incrementEle == null && versionColumn == null) {
-            setForeachEle.addElement(new TextElement("${column.escapedColumnName} = #{record.${column.javaProperty},jdbcType=${column.jdbcType}}"));
-        } else if (incrementEle != null) {
-            setForeachEle.addElement(incrementEle);
-        } else if (versionColumn != null) {
-            XmlElement ifEle = new XmlElement("if");
-            ifEle.addAttribute(new Attribute("test", "column.value != '" + versionColumn.getActualColumnName() + "'.toString()"));
-            ifEle.addElement(new TextElement("${column.escapedColumnName} = #{record.${column.javaProperty},jdbcType=${column.jdbcType}}"));
+        // 1. 先要排除versionColumn
+        XmlElement versionColumnCheckEle = null;
+        if (versionColumn != null) {
+            versionColumnCheckEle = new XmlElement("if");
+            versionColumnCheckEle.addAttribute(new Attribute("test", "column.value != '" + versionColumn.getActualColumnName() + "'.toString()"));
+        }
+        // 2. Increment Sets
+        List<XmlElement> incrementSetEles = PluginTools.getHook(IIncrementPluginHook.class).generateIncrementSetForSelectiveEnhancedPlugin(columns);
+        if (incrementSetEles == null) {
+            incrementSetEles = PluginTools.getHook(IIncrementsPluginHook.class).incrementSetsWithSelectiveEnhancedPluginElementGenerated(columns);
+        }
+        // 3. typeHandler 节点
+        List<XmlElement> typeHandlerSetEles = new ArrayList<>();
+        for (IntrospectedColumn column : columns) {
+            if (StringUtility.stringHasValue(column.getTypeHandler())
+                    && !(PluginTools.getHook(IIncrementsPluginHook.class).supportIncrement(column))
+                    || PluginTools.getHook(IIncrementPluginHook.class).supportIncrement(column)
+                    ) {
+                XmlElement whenEle = new XmlElement("when");
+                whenEle.addAttribute(new Attribute("test", "'" + column.getActualColumnName() + "'.toString() == column.value"));
+                whenEle.addElement(new TextElement("${column.escapedColumnName} = " + XmlElementGeneratorTools.getParameterClause("record.${column.javaProperty}", column)));
 
-            setForeachEle.addElement(ifEle);
+                typeHandlerSetEles.add(whenEle);
+            }
+        }
+        // 3. 普通节点
+        TextElement normalEle = new TextElement("${column.escapedColumnName} = #{record.${column.javaProperty},jdbcType=${column.jdbcType}}");
+
+        // 4. 如果Increment Sets不为空 或者 typeHandler不为空，生成Choose节点
+        XmlElement chooseEle = null;
+        if (incrementSetEles != null || !typeHandlerSetEles.isEmpty()) {
+            chooseEle = new XmlElement("choose");
+            if (incrementSetEles != null) {
+                for (XmlElement whenIncEle : incrementSetEles) {
+                    chooseEle.addElement(whenIncEle);
+                }
+            }
+
+            for (XmlElement whenEle : typeHandlerSetEles) {
+                chooseEle.addElement(whenEle);
+            }
+
+            XmlElement otherwiseEle = new XmlElement("otherwise");
+            otherwiseEle.addElement(normalEle);
+            chooseEle.addElement(otherwiseEle);
         }
 
+        // 5. 如果version不为空
+        if (versionColumnCheckEle != null) {
+            versionColumnCheckEle.addElement(chooseEle != null ? chooseEle : normalEle);
 
+            setForeachEle.addElement(versionColumnCheckEle);
+        } else {
+            setForeachEle.addElement(chooseEle != null ? chooseEle : normalEle);
+        }
+
+        // 普通Selective
         XmlElement setOtherwiseEle = new XmlElement("otherwise");
         setOtherwiseEle.addElement(XmlElementGeneratorTools.generateSetsSelective(columns, "record."));
         setsChooseEle.addElement(setOtherwiseEle);

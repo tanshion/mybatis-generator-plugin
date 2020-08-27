@@ -26,6 +26,7 @@ import org.mybatis.generator.config.MergeConstants;
 
 import java.lang.reflect.Array;
 import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -109,6 +110,83 @@ public class BugFixedTest {
                 Assert.assertEquals(result, 1);
                 // 自增ID
                 Assert.assertEquals(tb.get("id"), 1L);
+            }
+        });
+    }
+
+    /**
+     * 集成SelectiveEnhancedPlugin，typeHandler问题
+     * @throws Exception
+     */
+    @Test
+    public void bug0003() throws Exception {
+        MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/bug-0003.xml");
+        tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/bug-0003.sql"), new AbstractShellCallback() {
+            @Override
+            public void reloadProject(SqlSession sqlSession, ClassLoader loader, String packagz) throws Exception {
+                ObjectUtil tbMapper = new ObjectUtil(sqlSession.getMapper(loader.loadClass(packagz + ".TbMapper")));
+
+                ObjectUtil tb = new ObjectUtil(loader, packagz + ".Tb");
+
+                tb.set("id", 1L);
+                tb.set("field1", new SimpleDateFormat("yyyy-MM-dd").parse("2019-07-08"));
+
+
+                tbMapper.invoke("updateByPrimaryKey", tb.getObject());
+                ResultSet rs = DBHelper.execute(sqlSession.getConnection(), "select field1 from tb where id = 1");
+                rs.first();
+                Assert.assertEquals(rs.getString("field1"), "2019:07:08");
+
+                tb.set("field1", new SimpleDateFormat("yyyy-MM-dd").parse("2019-07-09"));
+                ObjectUtil tbColumnField1 = new ObjectUtil(loader, packagz + ".Tb$Column#field1");
+                Object columns = Array.newInstance(tbColumnField1.getCls(), 1);
+                Array.set(columns, 0, tbColumnField1.getObject());
+
+                tbMapper.invoke("updateByPrimaryKeySelective", tb.getObject(), columns);
+                rs = DBHelper.execute(sqlSession.getConnection(), "select field1 from tb where id = 1");
+                rs.first();
+                Assert.assertEquals(rs.getString("field1"), "2019:07:09");
+            }
+        });
+    }
+
+    /**
+     * 测试domainObjectRenamingRule和
+     */
+    @Test
+    public void bug0004() throws Exception {
+        DBHelper.createDB("scripts/BugFixedTest/bug-0004.sql");
+        // 规则 ^T 替换成空，也就是去掉前缀
+        MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/bug-0004.xml");
+        MyBatisGenerator myBatisGenerator = tool.generate();
+        for (GeneratedJavaFile file : myBatisGenerator.getGeneratedJavaFiles()) {
+            String name = file.getCompilationUnit().getType().getShortName();
+            if (!name.matches("B.*")) {
+                Assert.assertTrue(false);
+            }
+            if (name.endsWith("Example")) {
+                Assert.assertEquals(file.getCompilationUnit().getType().getPackageName(), "com.itfsw.dao.example");
+            }
+        }
+    }
+
+    /**
+     * 测试Example为null情况
+     */
+    @Test
+    public void bug0005() throws Exception {
+        // 规则 ^T 替换成空，也就是去掉前缀
+        MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/bug-0005.xml");
+        tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/bug-0005.sql"), new AbstractShellCallback() {
+            @Override
+            public void reloadProject(SqlSession sqlSession, ClassLoader loader, String packagz) throws Exception {
+                ObjectUtil tbMapper = new ObjectUtil(sqlSession.getMapper(loader.loadClass(packagz + ".TbMapper")));
+
+                List list = (List) tbMapper.invoke("selectByExample", null);
+                Assert.assertEquals(list.size(), 4);
+
+                list = (List)  tbMapper.invoke("selectByExampleSelective", null, null);
+                Assert.assertEquals(list.size(), 4);
             }
         });
     }
@@ -333,7 +411,7 @@ public class BugFixedTest {
     @Test
     public void issues81() throws Exception {
         MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/issues-81.xml");
-        MyBatisGenerator myBatisGenerator =  tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/issues-81.sql"));
+        MyBatisGenerator myBatisGenerator = tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/issues-81.sql"));
 
         // 是否在使用系统默认模板
         int count = 0;
@@ -343,6 +421,53 @@ public class BugFixedTest {
             }
         }
         Assert.assertTrue(count == 0);
+    }
+
+    /**
+     * selectByExampleSelective有下划线的字段总返回空
+     */
+    @Test
+    public void issues92() throws Exception {
+        MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/issues-92.xml");
+        tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/issues-92.sql"), new AbstractShellCallback() {
+            @Override
+            public void reloadProject(SqlSession sqlSession, ClassLoader loader, String packagz) throws Exception {
+                ObjectUtil tbMapper = new ObjectUtil(sqlSession.getMapper(loader.loadClass(packagz + ".TbMapper")));
+
+                // selective
+                ObjectUtil tbColumnId = new ObjectUtil(loader, packagz + ".Tb$Column#id");
+                ObjectUtil tbColumnMyName = new ObjectUtil(loader, packagz + ".Tb$Column#myName");
+                Object columns = Array.newInstance(tbColumnId.getCls(), 2);
+                Array.set(columns, 0, tbColumnId.getObject());
+                Array.set(columns, 1, tbColumnMyName.getObject());
+
+                String sql = SqlHelper.getFormatMapperSql(tbMapper.getObject(), "selectByExampleSelective", null, columns);
+                Assert.assertEquals(sql, "select id , my_name from tb");
+                // 2. 执行sql
+                List<Object> list = (List<Object>) tbMapper.invoke("selectByExampleSelective", null, columns);
+                Assert.assertTrue(new ObjectUtil(list.get(0)).get("myName") != null);
+            }
+        });
+    }
+
+    /**
+     * 枚举插件无法生成枚举：枚举值为字符串的情况无法生成枚举
+     * https://github.com/itfsw/mybatis-generator-plugin/issues/100
+     * @throws Exception
+     */
+    @Test
+    public void issues100() throws Exception {
+        MyBatisGeneratorTool tool = MyBatisGeneratorTool.create("scripts/BugFixedTest/issues-100.xml");
+        tool.generate(() -> DBHelper.createDB("scripts/BugFixedTest/issues-100.sql"), new AbstractShellCallback() {
+            @Override
+            public void reloadProject(SqlSession sqlSession, ClassLoader loader, String packagz) throws Exception {
+                // 1. 测试标准注释
+                ObjectUtil enumField2Success = new ObjectUtil(loader, packagz + ".SysCompany$CompanyStatus#DISABLE");
+                Assert.assertEquals(enumField2Success.invoke("value"), "disable");
+                Assert.assertEquals(enumField2Success.invoke("getValue"), "disable");
+                Assert.assertEquals(enumField2Success.invoke("getName"), "禁用");
+            }
+        });
     }
 
     /**
