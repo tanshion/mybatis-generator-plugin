@@ -8,15 +8,36 @@ package com.itfsw.mybatis.generator.plugins.ext;
 import org.mybatis.generator.api.IntrospectedColumn;
 import org.mybatis.generator.api.dom.java.FullyQualifiedJavaType;
 import org.mybatis.generator.internal.types.JavaTypeResolverDefaultImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Types;
 
 public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
-    public MyTypeResolverSolver() {
-        this.typeMap.put(Types.SMALLINT, new JdbcTypeInformation("SMALLINT", new FullyQualifiedJavaType(Integer.class.getName())));
-        this.typeMap.put(Types.TINYINT, new JdbcTypeInformation("TINYINT", new FullyQualifiedJavaType(Integer.class.getName())));
+    protected static final Logger logger = LoggerFactory.getLogger(MyTypeResolverSolver.class);
+    public static final String KEY_TINYINT = "TINYINT";
+    public static final String KEY_SMALLINT = "SMALLINT";
+
+    @Override
+    protected FullyQualifiedJavaType overrideDefaultType(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
+        FullyQualifiedJavaType answer = super.overrideDefaultType(column, defaultType);
+
+        if (column.getJdbcType() == Types.TINYINT && properties.containsKey(KEY_TINYINT)) {
+            //logger.warn(column.getActualColumnName() + "的类型" + column.getJdbcTypeName() +
+            //        "转换为" + properties.get(KEY_TINYINT));
+            answer = new FullyQualifiedJavaType(properties.getProperty(KEY_TINYINT));
+        }
+
+        if (column.getJdbcType() == Types.SMALLINT) {
+            //logger.warn(column.getActualColumnName() + "的类型" + column.getJdbcTypeName() +
+            //        "转换为" + properties.get(KEY_SMALLINT));
+            answer = new FullyQualifiedJavaType(properties.getProperty(KEY_SMALLINT));
+        }
+
+        return answer;
     }
 
+    @Override
     protected FullyQualifiedJavaType calculateBigDecimalReplacement(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer;
 
