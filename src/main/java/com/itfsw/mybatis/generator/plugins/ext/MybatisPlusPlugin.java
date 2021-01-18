@@ -17,11 +17,13 @@
 package com.itfsw.mybatis.generator.plugins.ext;
 
 import com.itfsw.mybatis.generator.plugins.utils.BasePlugin;
-import org.mybatis.generator.api.IntrospectedColumn;
-import org.mybatis.generator.api.IntrospectedTable;
-import org.mybatis.generator.api.dom.java.Field;
-import org.mybatis.generator.api.dom.java.TopLevelClass;
+import org.mybatis.generator.api.*;
+import org.mybatis.generator.api.dom.java.*;
+import org.mybatis.generator.exception.ShellException;
+import org.mybatis.generator.internal.DefaultShellCallback;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,9 +37,13 @@ import java.util.List;
  */
 public class MybatisPlusPlugin extends BasePlugin {
 
+    private ShellCallback shellCallback;
+
+    private final String BASE_MAPPER_TYPE = "baseMapper";
     private final String TABLE_NAME = "tableName";
     private final String KEY_SEQUENCE = "keySequence";
     private final String TABLE_ID_TYPE = "tableIdType";
+    private String baseMapper;
     private String tableName;
     private String tableIdType;
     private String keySequence;
@@ -51,6 +57,8 @@ public class MybatisPlusPlugin extends BasePlugin {
     @Override
     public void initialized(IntrospectedTable introspectedTable) {
         super.initialized(introspectedTable);
+        shellCallback = new DefaultShellCallback(false);
+        baseMapper = this.getProperties().getProperty(BASE_MAPPER_TYPE);
         tableName = this.getProperties().getProperty(TABLE_NAME);
         tableIdType = this.getProperties().getProperty(TABLE_ID_TYPE);
         keySequence = introspectedTable.getTableConfigurationProperty(KEY_SEQUENCE);
@@ -103,6 +111,42 @@ public class MybatisPlusPlugin extends BasePlugin {
             topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.KeySequence");
             topLevelClass.addAnnotation(String.format("@KeySequence(value = \"%s\")", keySequence));
         }
+    }
+
+
+    public List<GeneratedJavaFile> contextGenerateAdditionalJavaFiles(IntrospectedTable introspectedTable) {
+        JavaFormatter javaFormatter = context.getJavaFormatter();
+        String daoTargetDir = "src/main/java";
+        List<GeneratedJavaFile> mapperJavaFiles = new ArrayList<>();
+        try {
+            for (GeneratedJavaFile javaFile : introspectedTable.getGeneratedJavaFiles()) {
+                CompilationUnit unit = javaFile.getCompilationUnit();
+                FullyQualifiedJavaType baseModelJavaType = unit.getType();
+                String shortName = baseModelJavaType.getShortName();
+                String daoTargetPackage = javaFile.getTargetPackage().replace(".entity", ".mapper");
+                Interface mapperInterface = new Interface(
+                        daoTargetPackage + "." + shortName + "Mapper");
+                mapperInterface.setVisibility(JavaVisibility.PUBLIC);
+                FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
+                // 添加泛型支持
+                mapperInterface.addImportedType(baseModelJavaType);
+                mapperInterface.addImportedType(daoSuperType);
+                daoSuperType.addTypeArgument(baseModelJavaType);
+                mapperInterface.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
+
+                GeneratedJavaFile mapperJavaFile = new GeneratedJavaFile(mapperInterface, daoTargetDir, javaFormatter);
+                File mapperDir = shellCallback.getDirectory(daoTargetDir, daoTargetPackage);
+                File mapperFile = new File(mapperDir, mapperJavaFile.getFileName());
+                // 文件不存在
+                if (!mapperFile.exists()) {
+                    mapperJavaFiles.add(mapperJavaFile);
+                }
+
+            }
+        } catch (ShellException e) {
+            e.printStackTrace();
+        }
+        return mapperJavaFiles;
     }
 
 }
