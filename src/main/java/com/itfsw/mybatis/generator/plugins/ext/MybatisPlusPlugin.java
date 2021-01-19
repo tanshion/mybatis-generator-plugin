@@ -19,12 +19,18 @@ package com.itfsw.mybatis.generator.plugins.ext;
 import com.itfsw.mybatis.generator.plugins.utils.BasePlugin;
 import org.mybatis.generator.api.*;
 import org.mybatis.generator.api.dom.java.*;
+import org.mybatis.generator.config.JavaClientGeneratorConfiguration;
+import org.mybatis.generator.config.JavaModelGeneratorConfiguration;
+import org.mybatis.generator.config.PropertyRegistry;
+import org.mybatis.generator.config.TableConfiguration;
 import org.mybatis.generator.exception.ShellException;
 import org.mybatis.generator.internal.DefaultShellCallback;
+import org.mybatis.generator.internal.util.StringUtility;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * ---------------------------------------------------------------------------
@@ -113,19 +119,60 @@ public class MybatisPlusPlugin extends BasePlugin {
         }
     }
 
+    @Override
+    public boolean sqlMapGenerated(GeneratedXmlFile sqlMap, IntrospectedTable introspectedTable) {
+        Properties properties = introspectedTable.getTableConfiguration().getProperties();
+        properties.setProperty(PropertyRegistry.TABLE_MODEL_ONLY, "true");
+        return super.sqlMapGenerated(sqlMap, introspectedTable);
+    }
+
+    //@Override
+    //public boolean clientGenerated(Interface interfaze, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+    //    try {
+    //        FullyQualifiedJavaType type = interfaze.getType();
+    //        Interface mapperInterface = new Interface(type);
+    //        String daoTargetDir = this.getContext().getJavaClientGeneratorConfiguration().getTargetProject();
+    //        String daoTargetPackage = this.getContext().getJavaClientGeneratorConfiguration().getTargetPackage();
+    //        GeneratedJavaFile mapperJavaFile = new GeneratedJavaFile(mapperInterface, daoTargetDir, context.getJavaFormatter());
+    //        File mapperDir = shellCallback.getDirectory(daoTargetDir, daoTargetPackage);
+    //        File mapperFile = new File(mapperDir, mapperJavaFile.getFileName());
+    //        // 文件存在
+    //        if (mapperFile.exists()) {
+    //            return false;
+    //        }
+    //    } catch (ShellException e) {
+    //        e.printStackTrace();
+    //    }
+    //    return super.clientGenerated(interfaze, topLevelClass, introspectedTable);
+    //}
 
     public List<GeneratedJavaFile> contextGenerateAdditionalJavaFiles(IntrospectedTable introspectedTable) {
         JavaFormatter javaFormatter = context.getJavaFormatter();
-        String daoTargetDir = "src/main/java";
+
+        JavaClientGeneratorConfiguration javaClientGeneratorConfiguration = this.getContext().getJavaClientGeneratorConfiguration();
+        String daoTargetDir = javaClientGeneratorConfiguration.getTargetProject();
+        String daoTargetPackage = javaClientGeneratorConfiguration.getTargetPackage();
+
+        JavaModelGeneratorConfiguration javaModelGeneratorConfiguration = this.getContext().getJavaModelGeneratorConfiguration();
+        String targetPackage = javaModelGeneratorConfiguration.getTargetPackage();
+
+        TableConfiguration tableConfiguration = introspectedTable.getTableConfiguration();
+        String mapperName = tableConfiguration.getMapperName();
+
         List<GeneratedJavaFile> mapperJavaFiles = new ArrayList<>();
         try {
             for (GeneratedJavaFile javaFile : introspectedTable.getGeneratedJavaFiles()) {
                 CompilationUnit unit = javaFile.getCompilationUnit();
                 FullyQualifiedJavaType baseModelJavaType = unit.getType();
-                String shortName = baseModelJavaType.getShortName();
-                String daoTargetPackage = javaFile.getTargetPackage().replace(".entity", ".mapper");
-                Interface mapperInterface = new Interface(
-                        daoTargetPackage + "." + shortName + "Mapper");
+                String shortName = baseModelJavaType.getFullyQualifiedNameWithoutTypeParameters().replace(targetPackage, "");
+                Interface mapperInterface;
+                if (StringUtility.stringHasValue(mapperName)) {
+                    mapperInterface = new Interface(
+                            daoTargetPackage + "." + mapperName);
+                } else {
+                    mapperInterface = new Interface(
+                            daoTargetPackage  + shortName + "Mapper");
+                }
                 mapperInterface.setVisibility(JavaVisibility.PUBLIC);
                 FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
                 // 添加泛型支持
@@ -135,13 +182,12 @@ public class MybatisPlusPlugin extends BasePlugin {
                 mapperInterface.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
 
                 GeneratedJavaFile mapperJavaFile = new GeneratedJavaFile(mapperInterface, daoTargetDir, javaFormatter);
-                File mapperDir = shellCallback.getDirectory(daoTargetDir, daoTargetPackage);
+                File mapperDir = shellCallback.getDirectory(mapperJavaFile.getTargetProject(), mapperJavaFile.getTargetPackage());
                 File mapperFile = new File(mapperDir, mapperJavaFile.getFileName());
                 // 文件不存在
                 if (!mapperFile.exists()) {
                     mapperJavaFiles.add(mapperJavaFile);
                 }
-
             }
         } catch (ShellException e) {
             e.printStackTrace();
