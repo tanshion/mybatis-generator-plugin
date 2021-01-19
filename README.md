@@ -45,7 +45,7 @@ Maven引用：
 <dependency>
   <groupId>com.itfsw</groupId>
   <artifactId>mybatis-generator-plugin</artifactId>
-  <version>1.3.8</version>
+  <version>1.3.9</version>
 </dependency>
 ```
 ---------------------------------------
@@ -100,7 +100,7 @@ targetCompatibility = 1.8
 
 
 def mybatisGeneratorCore = 'org.mybatis.generator:mybatis-generator-core:1.3.7'
-def itfswMybatisGeneratorPlugin = 'com.itfsw:mybatis-generator-plugin:1.3.8'
+def itfswMybatisGeneratorPlugin = 'com.itfsw:mybatis-generator-plugin:1.3.9'
 
 mybatisGenerator {
   verbose = false
@@ -1561,6 +1561,26 @@ public class Tb {
         public String getName() {
             return this.name;
         }
+        public Field2 parseValue(Short value) {
+            if (value != null) {
+                for (Field2 item : values()) {
+                    if (item.value.equals(value)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
+        }
+        public Field2 parseName(String name) {
+            if (name != null) {
+                for (Field2 item : values()) {
+                    if (item.name.equals(name)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
+        }
     }
 
     public enum Status {
@@ -1583,6 +1603,26 @@ public class Tb {
         public String getName() {
             return this.name;
         }
+        public Status parseValue(Short value) {
+            if (value != null) {
+                for (Status item : values()) {
+                    if (item.value.equals(value)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
+        }
+        public Status parseName(String name) {
+            if (name != null) {
+                for (Status item : values()) {
+                    if (item.name.equals(name)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
+        }
     }
 
     public enum UserType {
@@ -1604,6 +1644,26 @@ public class Tb {
         }
         public String getName() {
             return this.name;
+        }
+        public UserType parseValue(Short value) {
+            if (value != null) {
+                for (UserType item : values()) {
+                    if (item.value.equals(value)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
+        }
+        public UserType parseName(String name) {
+            if (name != null) {
+                for (UserType item : values()) {
+                    if (item.name.equals(name)) {
+                        return item;
+                    }
+                }
+            }
+            return null;
         }
     }
 }
@@ -1650,8 +1710,10 @@ public class Test {
     <plugin type="com.itfsw.mybatis.generator.plugins.MapperAnnotationPlugin">
         <!-- @Mapper 默认开启 -->
         <property name="@Mapper" value="true"/>
-        <!-- @Repository 默认关闭，开启后解决IDEA工具@Autowired报错 -->
-        <property name="@Repository" value="false"/>
+        <!-- @Repository 开启后解决IDEA工具@Autowired报错 -->
+        <property name="@Repository" value="org.springframework.stereotype.Repository"/>
+        <!-- 其他自定义注解 -->
+        <property name="@DS(&quot;master&quot;)" value="com.baomidou.dynamic.datasource.annotation.DS"/>
     </plugin>
 </xml>
 ```
