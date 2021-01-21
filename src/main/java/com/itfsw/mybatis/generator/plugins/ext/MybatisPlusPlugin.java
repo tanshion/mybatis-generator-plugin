@@ -62,7 +62,7 @@ public class MybatisPlusPlugin extends BasePlugin {
         shellCallback = new DefaultShellCallback(false);
         baseMapper = this.getProperties().getProperty("baseMapper");
         tableName = this.getProperties().getProperty("tableName");
-        tableIdType = this.getProperties().getProperty("keySequence");
+        tableIdType = this.getProperties().getProperty("tableIdType");
         keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
     }
 
@@ -85,13 +85,15 @@ public class MybatisPlusPlugin extends BasePlugin {
         List<IntrospectedColumn> primaryKeyColumns = introspectedTable.getPrimaryKeyColumns();
         if (primaryKeyColumns.size() == 1) {
             IntrospectedColumn introspectedColumn = primaryKeyColumns.get(0);
-            topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.IdType");
+            if (StringUtility.stringHasValue(tableIdType)) {
+                topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.IdType");
+            }
             topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.TableId");
 
             List<Field> fields = topLevelClass.getFields();
             for (Field field : fields) {
                 if (field.getName().equals(introspectedColumn.getJavaProperty())) {
-                    if (null != tableIdType && !"".equals(tableIdType)) {
+                    if (StringUtility.stringHasValue(tableIdType)) {
                         field.addAnnotation(String.format("@TableId(type = IdType.%s)", tableIdType));
                     } else {
                         field.addAnnotation("@TableId");
