@@ -21,7 +21,6 @@ import org.mybatis.generator.api.*;
 import org.mybatis.generator.api.dom.java.*;
 import org.mybatis.generator.config.JavaClientGeneratorConfiguration;
 import org.mybatis.generator.config.JavaModelGeneratorConfiguration;
-import org.mybatis.generator.config.PropertyRegistry;
 import org.mybatis.generator.config.TableConfiguration;
 import org.mybatis.generator.exception.ShellException;
 import org.mybatis.generator.internal.DefaultShellCallback;
@@ -30,7 +29,6 @@ import org.mybatis.generator.internal.util.StringUtility;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * ---------------------------------------------------------------------------
@@ -44,12 +42,19 @@ import java.util.Properties;
 public class MybatisPlusPlugin extends BasePlugin {
 
     private ShellCallback shellCallback;
+    private JavaFormatter javaFormatter;
 
     private String baseMapper;
     private String tableName;
     private String tableIdType;
     private String keySequence;
-
+    private String targetPackage;
+    private String targetProject;
+    private String mapperTargetPackage;
+    private String generatedController = "false";
+    private String constructorTargetPackage;
+    private String generatedService = "false";
+    private String serviceTargetPackage;
 
     /**
      * 具体执行顺序 http://www.mybatis.org/generator/reference/pluggingIn.html
@@ -60,10 +65,22 @@ public class MybatisPlusPlugin extends BasePlugin {
     public void initialized(IntrospectedTable introspectedTable) {
         super.initialized(introspectedTable);
         shellCallback = new DefaultShellCallback(false);
+        javaFormatter = context.getJavaFormatter();
         baseMapper = this.getProperties().getProperty("baseMapper");
         tableName = this.getProperties().getProperty("tableName");
         tableIdType = this.getProperties().getProperty("tableIdType");
+        constructorTargetPackage = this.getProperties().getProperty("constructorTargetPackage");
+        serviceTargetPackage = this.getProperties().getProperty("serviceTargetPackage");
         keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
+        generatedController = introspectedTable.getTableConfigurationProperty("generatedController");
+        generatedService = introspectedTable.getTableConfigurationProperty("generatedService");
+
+        JavaModelGeneratorConfiguration javaModelGenCfg = context.getJavaModelGeneratorConfiguration();
+        targetPackage = javaModelGenCfg.getTargetPackage();
+        targetProject = javaModelGenCfg.getTargetProject();
+        JavaClientGeneratorConfiguration javaCliGenCfg = context.getJavaClientGeneratorConfiguration();
+        mapperTargetPackage = javaCliGenCfg.getTargetPackage();
+
     }
 
 
@@ -117,79 +134,115 @@ public class MybatisPlusPlugin extends BasePlugin {
         }
     }
 
-    @Override
-    public boolean sqlMapGenerated(GeneratedXmlFile sqlMap, IntrospectedTable introspectedTable) {
-        Properties properties = introspectedTable.getTableConfiguration().getProperties();
-        properties.setProperty(PropertyRegistry.TABLE_MODEL_ONLY, "true");
-        return super.sqlMapGenerated(sqlMap, introspectedTable);
-    }
-
-    //@Override
-    //public boolean clientGenerated(Interface interfaze, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
-    //    try {
-    //        FullyQualifiedJavaType type = interfaze.getType();
-    //        Interface mapperInterface = new Interface(type);
-    //        String daoTargetDir = this.getContext().getJavaClientGeneratorConfiguration().getTargetProject();
-    //        String daoTargetPackage = this.getContext().getJavaClientGeneratorConfiguration().getTargetPackage();
-    //        GeneratedJavaFile mapperJavaFile = new GeneratedJavaFile(mapperInterface, daoTargetDir, context.getJavaFormatter());
-    //        File mapperDir = shellCallback.getDirectory(daoTargetDir, daoTargetPackage);
-    //        File mapperFile = new File(mapperDir, mapperJavaFile.getFileName());
-    //        // 文件存在
-    //        if (mapperFile.exists()) {
-    //            return false;
-    //        }
-    //    } catch (ShellException e) {
-    //        e.printStackTrace();
-    //    }
-    //    return super.clientGenerated(interfaze, topLevelClass, introspectedTable);
-    //}
 
     public List<GeneratedJavaFile> contextGenerateAdditionalJavaFiles(IntrospectedTable introspectedTable) {
-        JavaFormatter javaFormatter = context.getJavaFormatter();
-
-        JavaClientGeneratorConfiguration javaCliGenCfg = context.getJavaClientGeneratorConfiguration();
-        String daoTargetDir = javaCliGenCfg.getTargetProject();
-        String daoTargetPackage = javaCliGenCfg.getTargetPackage();
-
-        JavaModelGeneratorConfiguration javaModelGenCfg = context.getJavaModelGeneratorConfiguration();
-        String targetPackage = javaModelGenCfg.getTargetPackage();
-
+        List<GeneratedJavaFile> generatedJavaFiles = new ArrayList<>();
         TableConfiguration tableConfiguration = introspectedTable.getTableConfiguration();
-        String mapperName = tableConfiguration.getMapperName();
-
-        List<GeneratedJavaFile> mapperJavaFiles = new ArrayList<>();
+        List<GeneratedJavaFile> javaFiles = introspectedTable.getGeneratedJavaFiles();
         try {
-            for (GeneratedJavaFile javaFile : introspectedTable.getGeneratedJavaFiles()) {
+            for (GeneratedJavaFile javaFile : javaFiles) {
                 CompilationUnit unit = javaFile.getCompilationUnit();
                 FullyQualifiedJavaType baseModelJavaType = unit.getType();
                 String shortName = baseModelJavaType.getFullyQualifiedNameWithoutTypeParameters()
                         .replace(targetPackage, "");
-                Interface mapperInterface;
-                if (StringUtility.stringHasValue(mapperName)) {
-                    mapperInterface = new Interface(daoTargetPackage + "." + mapperName);
-                } else {
-                    mapperInterface = new Interface(daoTargetPackage + shortName + "Mapper");
+
+                GeneratedJavaFile mapper = generatedMapper(tableConfiguration.getMapperName(), baseModelJavaType, shortName);
+                if (!fileExists(mapper)) {
+                    generatedJavaFiles.add(mapper);
                 }
-                mapperInterface.setVisibility(JavaVisibility.PUBLIC);
-                FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
-                // 添加泛型支持
-                mapperInterface.addImportedType(baseModelJavaType);
-                mapperInterface.addImportedType(daoSuperType);
-                daoSuperType.addTypeArgument(baseModelJavaType);
-                mapperInterface.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
-                // 判断是否要生成mapper java文件
-                GeneratedJavaFile mapperJavaFile = new GeneratedJavaFile(mapperInterface, daoTargetDir, javaFormatter);
-                File mapperDir = shellCallback.getDirectory(mapperJavaFile.getTargetProject(), mapperJavaFile.getTargetPackage());
-                File mapperFile = new File(mapperDir, mapperJavaFile.getFileName());
-                // 文件不存在
-                if (!mapperFile.exists()) {
-                    mapperJavaFiles.add(mapperJavaFile);
+                if (StringUtility.isTrue(generatedController)) {
+                    GeneratedJavaFile controller = generatedController(baseModelJavaType, shortName);
+                    if (!fileExists(controller)) {
+                        generatedJavaFiles.add(controller);
+                    }
                 }
+                if (StringUtility.isTrue(generatedService)) {
+                    GeneratedJavaFile service = generatedService(baseModelJavaType, shortName);
+                    if (!fileExists(service)) {
+                        generatedJavaFiles.add(service);
+                    }
+                    GeneratedJavaFile serviceImpl = generatedServiceImpl(service);
+                    if (!fileExists(serviceImpl)) {
+                        generatedJavaFiles.add(serviceImpl);
+                    }
+                }
+
+
             }
         } catch (ShellException e) {
             e.printStackTrace();
         }
-        return mapperJavaFiles;
+        return generatedJavaFiles;
+    }
+
+
+    private boolean fileExists(GeneratedJavaFile javaFile) throws ShellException {
+        File fileDir = shellCallback.getDirectory(javaFile.getTargetProject(), javaFile.getTargetPackage());
+        File file = new File(fileDir, javaFile.getFileName());
+        // 文件不存在
+        return file.exists();
+    }
+
+    private GeneratedJavaFile generatedService(FullyQualifiedJavaType baseModelJavaType, String shortName) {
+        Interface anInterface = new Interface(serviceTargetPackage + shortName + "Service");
+        anInterface.setVisibility(JavaVisibility.PUBLIC);
+
+        return new GeneratedJavaFile(anInterface, targetProject, javaFormatter);
+    }
+
+    private GeneratedJavaFile generatedServiceImpl(GeneratedJavaFile JavaFile) {
+        FullyQualifiedJavaType serviceType = JavaFile.getCompilationUnit().getType();
+        TopLevelClass topLevelClass = new TopLevelClass(serviceType.getPackageName()+".impl."+serviceType.getShortName()+"Impl");
+        topLevelClass.setVisibility(JavaVisibility.PUBLIC);
+        // 添加泛型支持
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
+        topLevelClass.addAnnotation("@Slf4j");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.RequiredArgsConstructor"));
+        topLevelClass.addAnnotation("@RequiredArgsConstructor");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("org.springframework.stereotype.Service"));
+        topLevelClass.addAnnotation("@Service");
+
+        topLevelClass.addImportedType(serviceType);
+        topLevelClass.addSuperInterface(new FullyQualifiedJavaType(serviceType.getShortName()));
+
+        return new GeneratedJavaFile(topLevelClass, targetProject, javaFormatter);
+    }
+
+    private GeneratedJavaFile generatedController(FullyQualifiedJavaType baseModelJavaType, String shortName) throws ShellException {
+        TopLevelClass topLevelClass = new TopLevelClass(constructorTargetPackage + shortName + "Controller");
+        topLevelClass.setVisibility(JavaVisibility.PUBLIC);
+        // 添加泛型支持
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
+        topLevelClass.addAnnotation(String.format("@Api(tags = \"%s\")", topLevelClass.getType().getShortName()));
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
+        topLevelClass.addAnnotation("@Slf4j");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.RequiredArgsConstructor"));
+        topLevelClass.addAnnotation("@RequiredArgsConstructor");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("org.springframework.web.bind.annotation.RestController"));
+        topLevelClass.addAnnotation("@RestController");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("org.springframework.web.bind.annotation.RequestMapping"));
+        topLevelClass.addAnnotation(String.format("@RequestMapping(\"%s\")", "/"));
+
+        return new GeneratedJavaFile(topLevelClass, targetProject, javaFormatter);
+
+    }
+
+    private GeneratedJavaFile generatedMapper(String mapperName, FullyQualifiedJavaType baseModelJavaType, String shortName) throws ShellException {
+        Interface anInterface;
+        if (StringUtility.stringHasValue(mapperName)) {
+            anInterface = new Interface(mapperTargetPackage + "." + mapperName);
+        } else {
+            anInterface = new Interface(mapperTargetPackage + shortName + "Mapper");
+        }
+        anInterface.setVisibility(JavaVisibility.PUBLIC);
+        FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
+        // 添加泛型支持
+        anInterface.addImportedType(baseModelJavaType);
+        anInterface.addImportedType(daoSuperType);
+        daoSuperType.addTypeArgument(baseModelJavaType);
+        anInterface.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
+
+        return new GeneratedJavaFile(anInterface, targetProject, javaFormatter);
     }
 
 }
