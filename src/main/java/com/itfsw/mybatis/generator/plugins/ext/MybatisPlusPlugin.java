@@ -19,9 +19,9 @@ package com.itfsw.mybatis.generator.plugins.ext;
 import com.itfsw.mybatis.generator.plugins.utils.BasePlugin;
 import org.mybatis.generator.api.*;
 import org.mybatis.generator.api.dom.java.*;
+import org.mybatis.generator.api.dom.xml.XmlElement;
 import org.mybatis.generator.config.JavaClientGeneratorConfiguration;
 import org.mybatis.generator.config.JavaModelGeneratorConfiguration;
-import org.mybatis.generator.config.TableConfiguration;
 import org.mybatis.generator.exception.ShellException;
 import org.mybatis.generator.internal.DefaultShellCallback;
 import org.mybatis.generator.internal.util.StringUtility;
@@ -44,13 +44,16 @@ public class MybatisPlusPlugin extends BasePlugin {
     private ShellCallback shellCallback;
     private JavaFormatter javaFormatter;
 
+    private String modelTargetPackage;
+    private String modelTargetProject;
+    private String clientTargetPackage;
+    private String clientTargetProject;
+
+
     private String baseMapper;
     private String tableName;
     private String tableIdType;
     private String keySequence;
-    private String targetPackage;
-    private String targetProject;
-    private String mapperTargetPackage;
     private String generatedController = "false";
     private String constructorTargetPackage;
     private String generatedService = "false";
@@ -69,17 +72,18 @@ public class MybatisPlusPlugin extends BasePlugin {
         baseMapper = this.getProperties().getProperty("baseMapper");
         tableName = this.getProperties().getProperty("tableName");
         tableIdType = this.getProperties().getProperty("tableIdType");
+        keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
         constructorTargetPackage = this.getProperties().getProperty("constructorTargetPackage");
         serviceTargetPackage = this.getProperties().getProperty("serviceTargetPackage");
-        keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
         generatedController = introspectedTable.getTableConfigurationProperty("generatedController");
         generatedService = introspectedTable.getTableConfigurationProperty("generatedService");
 
         JavaModelGeneratorConfiguration javaModelGenCfg = context.getJavaModelGeneratorConfiguration();
-        targetPackage = javaModelGenCfg.getTargetPackage();
-        targetProject = javaModelGenCfg.getTargetProject();
+        modelTargetPackage = javaModelGenCfg.getTargetPackage();
+        modelTargetProject = javaModelGenCfg.getTargetProject();
         JavaClientGeneratorConfiguration javaCliGenCfg = context.getJavaClientGeneratorConfiguration();
-        mapperTargetPackage = javaCliGenCfg.getTargetPackage();
+        clientTargetProject = javaCliGenCfg.getTargetProject();
+        clientTargetPackage = javaCliGenCfg.getTargetPackage();
 
     }
 
@@ -135,28 +139,58 @@ public class MybatisPlusPlugin extends BasePlugin {
     }
 
 
+    @Override
+    public boolean clientGenerated(Interface interfaze, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        GeneratedJavaFile javaFile = new GeneratedJavaFile(interfaze, clientTargetProject, javaFormatter);
+        FullyQualifiedTable fullyQualifiedTable = introspectedTable.getFullyQualifiedTable();
+        // 添加泛型支持
+        FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
+        FullyQualifiedJavaType modelJavaType = getModelJavaType(fullyQualifiedTable);
+        interfaze.addImportedType(daoSuperType);
+        interfaze.addImportedType(modelJavaType);
+        daoSuperType.addTypeArgument(modelJavaType);
+        interfaze.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
+        if (fileExists(javaFile)) {
+            return false;
+        }
+        return super.clientGenerated(interfaze, topLevelClass, introspectedTable);
+    }
+
+    private FullyQualifiedJavaType getModelJavaType(FullyQualifiedTable fullyQualifiedTable) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(modelTargetPackage);
+        sb.append('.');
+        if (StringUtility.stringHasValue(fullyQualifiedTable.getDomainObjectSubPackage())) {
+            sb.append(fullyQualifiedTable.getDomainObjectSubPackage());
+            sb.append('.');
+        }
+        sb.append(fullyQualifiedTable.getDomainObjectName());
+        return new FullyQualifiedJavaType(sb.toString());
+    }
+
     public List<GeneratedJavaFile> contextGenerateAdditionalJavaFiles(IntrospectedTable introspectedTable) {
         List<GeneratedJavaFile> generatedJavaFiles = new ArrayList<>();
-        TableConfiguration tableConfiguration = introspectedTable.getTableConfiguration();
+        FullyQualifiedJavaType modelJavaType = getModelJavaType(introspectedTable.getFullyQualifiedTable());
         List<GeneratedJavaFile> javaFiles = introspectedTable.getGeneratedJavaFiles();
-        try {
-            for (GeneratedJavaFile javaFile : javaFiles) {
-                CompilationUnit unit = javaFile.getCompilationUnit();
-                FullyQualifiedJavaType baseModelJavaType = unit.getType();
-                String shortName = baseModelJavaType.getFullyQualifiedNameWithoutTypeParameters()
-                        .replace(targetPackage, "");
+        for (GeneratedJavaFile javaFile : javaFiles) {
+            CompilationUnit unit = javaFile.getCompilationUnit();
+            FullyQualifiedJavaType baseModelJavaType = unit.getType();
+            if (modelJavaType.getFullyQualifiedName().equals(baseModelJavaType.getFullyQualifiedName())) {
+                String shortName = baseModelJavaType.getFullyQualifiedName()
+                        .replace(modelTargetPackage, "");
+                //GeneratedJavaFile mapper = generatedMapper(tableConfiguration.getMapperName(), baseModelJavaType, shortName);
+                //if (!fileExists(mapper)) {
+                //    generatedJavaFiles.add(mapper);
+                //}
 
-                GeneratedJavaFile mapper = generatedMapper(tableConfiguration.getMapperName(), baseModelJavaType, shortName);
-                if (!fileExists(mapper)) {
-                    generatedJavaFiles.add(mapper);
-                }
-                if (StringUtility.isTrue(generatedController)) {
+                if (StringUtility.stringHasValue(generatedController) && !"false".equals(generatedController)) {
                     GeneratedJavaFile controller = generatedController(baseModelJavaType, shortName);
                     if (!fileExists(controller)) {
                         generatedJavaFiles.add(controller);
                     }
                 }
-                if (StringUtility.isTrue(generatedService)) {
+
+                if (StringUtility.stringHasValue(generatedService) && !"false".equals(generatedService)) {
                     GeneratedJavaFile service = generatedService(baseModelJavaType, shortName);
                     if (!fileExists(service)) {
                         generatedJavaFiles.add(service);
@@ -166,33 +200,41 @@ public class MybatisPlusPlugin extends BasePlugin {
                         generatedJavaFiles.add(serviceImpl);
                     }
                 }
-
-
             }
-        } catch (ShellException e) {
-            e.printStackTrace();
         }
         return generatedJavaFiles;
     }
 
 
-    private boolean fileExists(GeneratedJavaFile javaFile) throws ShellException {
-        File fileDir = shellCallback.getDirectory(javaFile.getTargetProject(), javaFile.getTargetPackage());
-        File file = new File(fileDir, javaFile.getFileName());
-        // 文件不存在
-        return file.exists();
+    private boolean fileExists(GeneratedJavaFile javaFile) {
+        try {
+            File fileDir = shellCallback.getDirectory(javaFile.getTargetProject(), javaFile.getTargetPackage());
+            File file = new File(fileDir, javaFile.getFileName());
+            // 文件不存在
+            return file.exists();
+        } catch (ShellException e) {
+            e.printStackTrace();
+        }
+        return true;
     }
 
     private GeneratedJavaFile generatedService(FullyQualifiedJavaType baseModelJavaType, String shortName) {
-        Interface anInterface = new Interface(serviceTargetPackage + shortName + "Service");
+        String name;
+        if (StringUtility.isTrue(generatedService)) {
+            name = shortName + "Service";
+        } else {
+            name = "." + generatedService;
+        }
+
+        Interface anInterface = new Interface(serviceTargetPackage + name);
         anInterface.setVisibility(JavaVisibility.PUBLIC);
 
-        return new GeneratedJavaFile(anInterface, targetProject, javaFormatter);
+        return new GeneratedJavaFile(anInterface, modelTargetProject, javaFormatter);
     }
 
     private GeneratedJavaFile generatedServiceImpl(GeneratedJavaFile JavaFile) {
         FullyQualifiedJavaType serviceType = JavaFile.getCompilationUnit().getType();
-        TopLevelClass topLevelClass = new TopLevelClass(serviceType.getPackageName()+".impl."+serviceType.getShortName()+"Impl");
+        TopLevelClass topLevelClass = new TopLevelClass(serviceType.getPackageName() + ".impl." + serviceType.getShortName() + "Impl");
         topLevelClass.setVisibility(JavaVisibility.PUBLIC);
         // 添加泛型支持
         topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
@@ -205,11 +247,18 @@ public class MybatisPlusPlugin extends BasePlugin {
         topLevelClass.addImportedType(serviceType);
         topLevelClass.addSuperInterface(new FullyQualifiedJavaType(serviceType.getShortName()));
 
-        return new GeneratedJavaFile(topLevelClass, targetProject, javaFormatter);
+        return new GeneratedJavaFile(topLevelClass, modelTargetProject, javaFormatter);
     }
 
-    private GeneratedJavaFile generatedController(FullyQualifiedJavaType baseModelJavaType, String shortName) throws ShellException {
-        TopLevelClass topLevelClass = new TopLevelClass(constructorTargetPackage + shortName + "Controller");
+    private GeneratedJavaFile generatedController(FullyQualifiedJavaType baseModelJavaType, String shortName) {
+        String name;
+        if (StringUtility.isTrue(generatedController)) {
+            name = shortName + "Controller";
+        } else {
+            name = "." + generatedController;
+        }
+
+        TopLevelClass topLevelClass = new TopLevelClass(constructorTargetPackage + name);
         topLevelClass.setVisibility(JavaVisibility.PUBLIC);
         // 添加泛型支持
         topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
@@ -223,16 +272,16 @@ public class MybatisPlusPlugin extends BasePlugin {
         topLevelClass.addImportedType(new FullyQualifiedJavaType("org.springframework.web.bind.annotation.RequestMapping"));
         topLevelClass.addAnnotation(String.format("@RequestMapping(\"%s\")", "/"));
 
-        return new GeneratedJavaFile(topLevelClass, targetProject, javaFormatter);
+        return new GeneratedJavaFile(topLevelClass, modelTargetProject, javaFormatter);
 
     }
 
-    private GeneratedJavaFile generatedMapper(String mapperName, FullyQualifiedJavaType baseModelJavaType, String shortName) throws ShellException {
+    private GeneratedJavaFile generatedMapper(String mapperName, FullyQualifiedJavaType baseModelJavaType, String shortName) {
         Interface anInterface;
         if (StringUtility.stringHasValue(mapperName)) {
-            anInterface = new Interface(mapperTargetPackage + "." + mapperName);
+            anInterface = new Interface(clientTargetPackage + "." + mapperName);
         } else {
-            anInterface = new Interface(mapperTargetPackage + shortName + "Mapper");
+            anInterface = new Interface(clientTargetPackage + shortName + "Mapper");
         }
         anInterface.setVisibility(JavaVisibility.PUBLIC);
         FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
@@ -242,7 +291,271 @@ public class MybatisPlusPlugin extends BasePlugin {
         daoSuperType.addTypeArgument(baseModelJavaType);
         anInterface.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
 
-        return new GeneratedJavaFile(anInterface, targetProject, javaFormatter);
+        return new GeneratedJavaFile(anInterface, modelTargetProject, javaFormatter);
     }
 
+    @Override
+    public boolean clientBasicCountMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientBasicDeleteMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientBasicInsertMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientBasicSelectManyMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientBasicSelectOneMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientBasicUpdateMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientCountByExampleMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientCountByExampleMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientDeleteByExampleMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientDeleteByExampleMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientDeleteByPrimaryKeyMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientDeleteByPrimaryKeyMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientInsertMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientInsertMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByExampleWithBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByExampleWithBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByExampleWithoutBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByExampleWithoutBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByPrimaryKeyMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectByPrimaryKeyMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleSelectiveMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleSelectiveMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleWithBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleWithBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleWithoutBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByExampleWithoutBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeySelectiveMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeySelectiveMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeyWithBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeyWithBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeyWithoutBLOBsMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientUpdateByPrimaryKeyWithoutBLOBsMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientInsertSelectiveMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientInsertSelectiveMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean clientSelectAllMethodGenerated(Method method, Interface interfaze, IntrospectedTable introspectedTable) {
+        return super.clientSelectAllMethodGenerated(method, interfaze, introspectedTable);
+    }
+
+    @Override
+    public boolean clientSelectAllMethodGenerated(Method method, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean modelExampleClassGenerated(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapCountByExampleElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapDeleteByExampleElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapDeleteByPrimaryKeyElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapExampleWhereClauseElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapInsertElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapSelectByExampleWithoutBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapSelectByExampleWithBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapSelectByPrimaryKeyElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByExampleSelectiveElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByExampleWithBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByExampleWithoutBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByPrimaryKeySelectiveElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByPrimaryKeyWithBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapUpdateByPrimaryKeyWithoutBLOBsElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapInsertSelectiveElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
+
+    @Override
+    public boolean sqlMapSelectAllElementGenerated(XmlElement element, IntrospectedTable introspectedTable) {
+        return false;
+    }
 }

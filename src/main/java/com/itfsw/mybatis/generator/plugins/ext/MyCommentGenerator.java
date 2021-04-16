@@ -4,10 +4,31 @@ import org.mybatis.generator.api.IntrospectedColumn;
 import org.mybatis.generator.api.IntrospectedTable;
 import org.mybatis.generator.api.dom.java.*;
 import org.mybatis.generator.internal.DefaultCommentGenerator;
+import org.mybatis.generator.internal.util.StringUtility;
 
+import java.text.SimpleDateFormat;
+import java.util.Properties;
 import java.util.Set;
 
 public class MyCommentGenerator extends DefaultCommentGenerator {
+    private Properties properties = new Properties();
+    private boolean suppressDate = false;
+    private boolean suppressAllComments = false;
+    private boolean addRemarkComments = false;
+    private SimpleDateFormat dateFormat;
+
+    @Override
+    public void addConfigurationProperties(Properties properties) {
+        super.addConfigurationProperties(properties);
+        this.properties.putAll(properties);
+        this.suppressDate = StringUtility.isTrue(properties.getProperty("suppressDate"));
+        this.suppressAllComments = StringUtility.isTrue(properties.getProperty("suppressAllComments"));
+        this.addRemarkComments = StringUtility.isTrue(properties.getProperty("addRemarkComments"));
+        String dateFormatString = properties.getProperty("dateFormat");
+        if (StringUtility.stringHasValue(dateFormatString)) {
+            this.dateFormat = new SimpleDateFormat(dateFormatString);
+        }
+    }
 
     @Override
     public void addJavaFileComment(CompilationUnit compilationUnit) {
@@ -36,7 +57,17 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
 
     @Override
     public void addFieldComment(Field field, IntrospectedTable introspectedTable, IntrospectedColumn introspectedColumn) {
-        return;
+        if (!this.suppressAllComments) {
+            String remarks = introspectedColumn.getRemarks();
+            if (this.addRemarkComments && StringUtility.stringHasValue(remarks)) {
+                field.addJavaDocLine("/**");
+                String[] remarkLines = remarks.split(System.getProperty("line.separator"));
+                for (String remarkLine : remarkLines) {
+                    field.addJavaDocLine(" * " + remarkLine);
+                }
+                field.addJavaDocLine(" */");
+            }
+        }
     }
 
     @Override

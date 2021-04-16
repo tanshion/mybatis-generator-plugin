@@ -70,6 +70,7 @@ public class SwaggerPlugin extends BasePlugin {
             IntrospectedColumn column = getColumn(field, introspectedTable);
             String remarks = column.getRemarks();
             if (null != remarks && !"".equals(remarks)) {
+                remarks = remarks.replace(System.getProperty("line.separator"), "");
                 field.addAnnotation(String.format("@ApiModelProperty(value = \"%s\")", remarks));
             }
         }
