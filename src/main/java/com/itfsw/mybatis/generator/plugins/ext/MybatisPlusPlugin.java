@@ -123,10 +123,10 @@ public class MybatisPlusPlugin extends BasePlugin {
             }
         }
 
-        String tableRemarks = introspectedTable.getRemarks();
-        if (null != tableRemarks && !"".equals(tableRemarks)) {
-            topLevelClass.addAnnotation(String.format("//%s", tableRemarks));
-        }
+        //String tableRemarks = introspectedTable.getRemarks();
+        //if (null != tableRemarks && !"".equals(tableRemarks)) {
+        //    topLevelClass.addAnnotation(String.format("//%s", tableRemarks));
+        //}
         if ("true".equals(tableName)) {
             topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.TableName");
             topLevelClass.addAnnotation(String.format("@TableName(value = \"%s\")", introspectedTable.getFullyQualifiedTable().getIntrospectedTableName()));

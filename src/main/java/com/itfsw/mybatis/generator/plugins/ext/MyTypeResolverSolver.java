@@ -43,7 +43,7 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
 
         if (column.getScale() > 0 || column.getLength() > 18 || forceBigDecimals) {
             answer = defaultType;
-        } else if (column.getLength() <= 9) {
+        } else if (column.getLength() > 0 && column.getLength()<=9) {
             answer = new FullyQualifiedJavaType(Integer.class.getName());
         } else {
             answer = new FullyQualifiedJavaType(Long.class.getName());
