@@ -54,8 +54,10 @@ public class MybatisPlusPlugin extends BasePlugin {
     private String tableName;
     private String tableIdType;
     private String keySequence;
+    private String swagger = "false";
     private String generatedController = "false";
     private String constructorTargetPackage;
+    private String serviceStyle = "simple";//simple pro
     private String generatedService = "false";
     private String serviceTargetPackage;
 
@@ -75,6 +77,7 @@ public class MybatisPlusPlugin extends BasePlugin {
         keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
         constructorTargetPackage = this.getProperties().getProperty("constructorTargetPackage");
         serviceTargetPackage = this.getProperties().getProperty("serviceTargetPackage");
+        serviceStyle = this.getProperties().getProperty("serviceStyle");
         generatedController = introspectedTable.getTableConfigurationProperty("generatedController");
         generatedService = introspectedTable.getTableConfigurationProperty("generatedService");
 
@@ -191,13 +194,20 @@ public class MybatisPlusPlugin extends BasePlugin {
                 }
 
                 if (StringUtility.stringHasValue(generatedService) && !"false".equals(generatedService)) {
-                    GeneratedJavaFile service = generatedService(baseModelJavaType, shortName);
-                    if (!fileExists(service)) {
-                        generatedJavaFiles.add(service);
-                    }
-                    GeneratedJavaFile serviceImpl = generatedServiceImpl(service);
-                    if (!fileExists(serviceImpl)) {
-                        generatedJavaFiles.add(serviceImpl);
+                    if ("simple".equals(serviceStyle)) {
+                        GeneratedJavaFile simpleService = generatedSimpleService(baseModelJavaType, shortName);
+                        if (!fileExists(simpleService)) {
+                            generatedJavaFiles.add(simpleService);
+                        }
+                    } else {
+                        GeneratedJavaFile service = generatedService(baseModelJavaType, shortName);
+                        if (!fileExists(service)) {
+                            generatedJavaFiles.add(service);
+                        }
+                        GeneratedJavaFile serviceImpl = generatedServiceImpl(service);
+                        if (!fileExists(serviceImpl)) {
+                            generatedJavaFiles.add(serviceImpl);
+                        }
                     }
                 }
             }
@@ -250,6 +260,27 @@ public class MybatisPlusPlugin extends BasePlugin {
         return new GeneratedJavaFile(topLevelClass, modelTargetProject, javaFormatter);
     }
 
+    private GeneratedJavaFile generatedSimpleService(FullyQualifiedJavaType baseModelJavaType, String shortName) {
+        String name;
+        if (StringUtility.isTrue(generatedService)) {
+            name = shortName + "Service";
+        } else {
+            name = "." + generatedService;
+        }
+
+        TopLevelClass topLevelClass = new TopLevelClass(serviceTargetPackage + name);
+        topLevelClass.setVisibility(JavaVisibility.PUBLIC);
+        // 添加泛型支持
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
+        topLevelClass.addAnnotation("@Slf4j");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.RequiredArgsConstructor"));
+        topLevelClass.addAnnotation("@RequiredArgsConstructor");
+        topLevelClass.addImportedType(new FullyQualifiedJavaType("org.springframework.stereotype.Service"));
+        topLevelClass.addAnnotation("@Service");
+
+        return new GeneratedJavaFile(topLevelClass, modelTargetProject, javaFormatter);
+    }
+
     private GeneratedJavaFile generatedController(FullyQualifiedJavaType baseModelJavaType, String shortName) {
         String name;
         if (StringUtility.isTrue(generatedController)) {
@@ -261,8 +292,10 @@ public class MybatisPlusPlugin extends BasePlugin {
         TopLevelClass topLevelClass = new TopLevelClass(constructorTargetPackage + name);
         topLevelClass.setVisibility(JavaVisibility.PUBLIC);
         // 添加泛型支持
-        topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
-        topLevelClass.addAnnotation(String.format("@Api(tags = \"%s\")", topLevelClass.getType().getShortName()));
+        if (StringUtility.stringHasValue("true")){
+            topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
+            topLevelClass.addAnnotation(String.format("@Api(tags = \"%s\")", topLevelClass.getType().getShortName()));
+        }
         topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
         topLevelClass.addAnnotation("@Slf4j");
         topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.RequiredArgsConstructor"));
