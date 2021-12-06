@@ -292,10 +292,10 @@ public class MybatisPlusPlugin extends BasePlugin {
         TopLevelClass topLevelClass = new TopLevelClass(constructorTargetPackage + name);
         topLevelClass.setVisibility(JavaVisibility.PUBLIC);
         // 添加泛型支持
-        if (StringUtility.stringHasValue("true")){
-            topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
-            topLevelClass.addAnnotation(String.format("@Api(tags = \"%s\")", topLevelClass.getType().getShortName()));
-        }
+        //if (StringUtility.stringHasValue("true")){
+        //    topLevelClass.addImportedType(new FullyQualifiedJavaType("io.swagger.annotations.Api"));
+        //    topLevelClass.addAnnotation(String.format("@Api(tags = \"%s\")", topLevelClass.getType().getShortName()));
+        //}
         topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.extern.slf4j.Slf4j"));
         topLevelClass.addAnnotation("@Slf4j");
         topLevelClass.addImportedType(new FullyQualifiedJavaType("lombok.RequiredArgsConstructor"));

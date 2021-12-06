@@ -62,6 +62,15 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
             if (this.addRemarkComments && StringUtility.stringHasValue(remarks)) {
                 field.addJavaDocLine("/**");
                 String[] remarkLines = remarks.split(System.getProperty("line.separator"));
+                if (remarkLines.length<2){
+                    if (remarks.contains("\r\n")) {
+                        remarkLines = remarks.split("\r\n");
+                    }else if (remarks.contains("\n")) {
+                        remarkLines = remarks.split("\n");
+                    }else if (remarks.contains("\r")) {
+                        remarkLines = remarks.split("\r");
+                    }
+                }
                 for (String remarkLine : remarkLines) {
                     field.addJavaDocLine(" * " + remarkLine);
                 }
