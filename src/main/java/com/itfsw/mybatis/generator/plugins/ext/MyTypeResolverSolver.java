@@ -6,7 +6,6 @@
 package com.itfsw.mybatis.generator.plugins.ext;
 
 import org.mybatis.generator.api.IntrospectedColumn;
-import org.mybatis.generator.api.IntrospectedTable;
 import org.mybatis.generator.api.dom.java.FullyQualifiedJavaType;
 import org.mybatis.generator.internal.types.JavaTypeResolverDefaultImpl;
 import org.slf4j.Logger;
@@ -25,8 +24,8 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
     @Override
     protected FullyQualifiedJavaType overrideDefaultType(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer = super.overrideDefaultType(column, defaultType);
-        logger.info("overrideDefaultType"+"__"+column.getActualColumnName()+"--"+column.getJdbcTypeName()+"--"
-                +column.getJdbcType()+"--"+column.getScale()+"--"+column.getLength());
+        logger.info("overrideDefaultType" + "__" + column.getActualColumnName() + "--" + column.getJdbcTypeName() + "--"
+                + column.getJdbcType() + "--" + column.getScale() + "--" + column.getLength());
         if (column.getJdbcType() == Types.TINYINT && properties.containsKey(KEY_TINYINT)) {
             //logger.warn(column.getActualColumnName() + "的类型" + column.getJdbcTypeName() +
             //        "转换为" + properties.get(KEY_TINYINT));
@@ -45,19 +44,18 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
     @Override
     protected FullyQualifiedJavaType calculateBigDecimalReplacement(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer;
-        logger.info("overrideDefaultType"+"__"+column.getActualColumnName()+"--"+column.getJdbcTypeName()+"--"
-                +column.getJdbcType()+"--"+column.getScale()+"--"+column.getLength());
+        logger.info("overrideDefaultType" + "__" + column.getActualColumnName() + "--" + column.getJdbcTypeName() + "--"
+                + column.getJdbcType() + "--" + column.getScale() + "--" + column.getLength());
         String actualColumnName = column.getActualColumnName();
-        if (properties.containsKey(SEQ_TYPE)&& (actualColumnName.endsWith("_SEQ")||actualColumnName.endsWith("_seq"))) {
+        if (properties.containsKey(SEQ_TYPE) && (actualColumnName.endsWith("_SEQ") || actualColumnName.endsWith("_seq"))) {
             answer = new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
             return answer;
         }
 
-        if (properties.containsKey(NUMBER_LENGTH)&&properties.getProperty(NUMBER_LENGTH).contains(column.getLength()+",")) {
-            String nlProperty = properties.getProperty(NUMBER_LENGTH);
-            if (nlProperty.contains(column.getLength()+",")) {
-                String type = nlProperty.replace(column.getLength() + ",", "");
-                answer = new FullyQualifiedJavaType(type);
+        if (properties.containsKey(NUMBER_LENGTH) && properties.getProperty(NUMBER_LENGTH).contains(column.getLength() + ",")) {
+            String[] nlProperty = properties.getProperty(NUMBER_LENGTH).split(",");
+            if (nlProperty.length == 2 && nlProperty[0].equals("" + column.getLength())) {
+                answer = new FullyQualifiedJavaType(nlProperty[1]);
                 return answer;
             }
         }
