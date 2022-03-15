@@ -20,6 +20,7 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
     public static final String KEY_NUMBER_DEFAULT = "NUMBER_DEFAULT";
     public static final String NUMBER_LENGTH = "NUMBER_LENGTH";
     public static final String SEQ_TYPE = "SEQ_TYPE";
+    public static final String SEQ_END_STR = "SEQ_END_STR";
 
     @Override
     protected FullyQualifiedJavaType overrideDefaultType(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
@@ -47,9 +48,15 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
         logger.info("overrideDefaultType" + "__" + column.getActualColumnName() + "--" + column.getJdbcTypeName() + "--"
                 + column.getJdbcType() + "--" + column.getScale() + "--" + column.getLength());
         String actualColumnName = column.getActualColumnName();
-        if (properties.containsKey(SEQ_TYPE) && (actualColumnName.endsWith("_SEQ") || actualColumnName.endsWith("_seq"))) {
-            answer = new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
-            return answer;
+        if (properties.containsKey(SEQ_TYPE) && properties.containsKey(SEQ_END_STR)) {
+            String[] endStrArr = properties.getProperty(SEQ_END_STR).split(",");
+            for (String endStr : endStrArr) {
+                if (actualColumnName.endsWith(endStr)) {
+                    answer = new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
+
+                    return answer;
+                }
+            }
         }
 
         if (properties.containsKey(NUMBER_LENGTH) && properties.getProperty(NUMBER_LENGTH).contains(column.getLength() + ",")) {
