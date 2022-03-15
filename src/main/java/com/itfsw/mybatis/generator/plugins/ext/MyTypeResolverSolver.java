@@ -53,7 +53,6 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
             for (String endStr : endStrArr) {
                 if (actualColumnName.endsWith(endStr)) {
                     answer = new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
-
                     return answer;
                 }
             }
