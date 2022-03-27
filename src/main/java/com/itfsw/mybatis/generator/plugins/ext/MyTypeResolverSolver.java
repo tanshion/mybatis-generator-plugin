@@ -25,35 +25,28 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
     @Override
     protected FullyQualifiedJavaType overrideDefaultType(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer = super.overrideDefaultType(column, defaultType);
-        logger.info("overrideDefaultType" + "__" + column.getActualColumnName() + "--" + column.getJdbcTypeName() + "--"
-                + column.getJdbcType() + "--" + column.getScale() + "--" + column.getLength());
+        logger.info("overrideDefaultType --> ActualColumnName=={},JdbcTypeName=={},JdbcType=={},Scale={},Length=={}",
+                column.getActualColumnName(), column.getJdbcTypeName(), column.getJdbcType(), column.getScale(), column.getLength());
         if (column.getJdbcType() == Types.TINYINT && properties.containsKey(KEY_TINYINT)) {
-            //logger.warn(column.getActualColumnName() + "的类型" + column.getJdbcTypeName() +
-            //        "转换为" + properties.get(KEY_TINYINT));
             answer = new FullyQualifiedJavaType(properties.getProperty(KEY_TINYINT));
         }
-
         if (column.getJdbcType() == Types.SMALLINT && properties.containsKey(KEY_SMALLINT)) {
-            //logger.warn(column.getActualColumnName() + "的类型" + column.getJdbcTypeName() +
-            //        "转换为" + properties.get(KEY_SMALLINT));
             answer = new FullyQualifiedJavaType(properties.getProperty(KEY_SMALLINT));
         }
-
         return answer;
     }
 
     @Override
     protected FullyQualifiedJavaType calculateBigDecimalReplacement(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
-        FullyQualifiedJavaType answer;
-        logger.info("overrideDefaultType" + "__" + column.getActualColumnName() + "--" + column.getJdbcTypeName() + "--"
-                + column.getJdbcType() + "--" + column.getScale() + "--" + column.getLength());
-        String actualColumnName = column.getActualColumnName();
+        if (column.getScale() > 0) {
+            return defaultType;
+        }
+
         if (properties.containsKey(SEQ_TYPE) && properties.containsKey(SEQ_END_STR)) {
             String[] endStrArr = properties.getProperty(SEQ_END_STR).split(",");
             for (String endStr : endStrArr) {
-                if (actualColumnName.endsWith(endStr)) {
-                    answer = new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
-                    return answer;
+                if (column.getActualColumnName().endsWith(endStr)) {
+                    return new FullyQualifiedJavaType(properties.getProperty(SEQ_TYPE));
                 }
             }
         }
@@ -61,24 +54,21 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
         if (properties.containsKey(NUMBER_LENGTH) && properties.getProperty(NUMBER_LENGTH).contains(column.getLength() + ",")) {
             String[] nlProperty = properties.getProperty(NUMBER_LENGTH).split(",");
             if (nlProperty.length == 2 && nlProperty[0].equals("" + column.getLength())) {
-                answer = new FullyQualifiedJavaType(nlProperty[1]);
-                return answer;
+                return new FullyQualifiedJavaType(nlProperty[1]);
             }
         }
 
-        if (column.getScale() > 0 || column.getLength() > 18 || forceBigDecimals) {
-            answer = defaultType;
+        if (column.getLength() > 18 || forceBigDecimals) {
+            return defaultType;
         } else if (column.getLength() > 0 && column.getLength() <= 9) {
-            answer = new FullyQualifiedJavaType(Integer.class.getName());
+            return new FullyQualifiedJavaType(Integer.class.getName());
         } else {
             if (properties.containsKey(KEY_NUMBER_DEFAULT)) {
-                answer = new FullyQualifiedJavaType(properties.getProperty(KEY_NUMBER_DEFAULT));
+                return new FullyQualifiedJavaType(properties.getProperty(KEY_NUMBER_DEFAULT));
             } else {
-                answer = new FullyQualifiedJavaType(Long.class.getName());
+                return new FullyQualifiedJavaType(Long.class.getName());
             }
         }
-
-        return answer;
     }
 
 }
