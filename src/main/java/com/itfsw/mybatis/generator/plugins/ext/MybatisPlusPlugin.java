@@ -59,6 +59,7 @@ public class MybatisPlusPlugin extends BasePlugin {
     private String constructorTargetPackage;
     private String serviceStyle = "simple";//simple pro
     private String generatedService = "false";
+    private String generatedSqlMap = "true";
     private String serviceTargetPackage;
 
     /**
@@ -80,6 +81,7 @@ public class MybatisPlusPlugin extends BasePlugin {
         serviceStyle = this.getProperties().getProperty("serviceStyle");
         generatedController = introspectedTable.getTableConfigurationProperty("generatedController");
         generatedService = introspectedTable.getTableConfigurationProperty("generatedService");
+        generatedSqlMap = introspectedTable.getTableConfigurationProperty("generatedSqlMap");
 
         JavaModelGeneratorConfiguration javaModelGenCfg = context.getJavaModelGeneratorConfiguration();
         modelTargetPackage = javaModelGenCfg.getTargetPackage();
@@ -141,6 +143,15 @@ public class MybatisPlusPlugin extends BasePlugin {
         }
     }
 
+    @Override
+    public boolean sqlMapGenerated(GeneratedXmlFile sqlMap,
+            IntrospectedTable introspectedTable) {
+        if (StringUtility.stringHasValue(generatedService) && !"false".equals(generatedService)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     @Override
     public boolean clientGenerated(Interface interfaze, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
