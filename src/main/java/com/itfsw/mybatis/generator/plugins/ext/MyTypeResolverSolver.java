@@ -30,6 +30,10 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
     @Override
     protected FullyQualifiedJavaType overrideDefaultType(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         logger.info("overrideDefaultType --> {}", column.toString());
+        return super.overrideDefaultType(column, defaultType);
+    }
+
+    protected FullyQualifiedJavaType calculateBigDecimalReplacement(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer = super.overrideDefaultType(column, defaultType);
         String tls = column.getJdbcType() + "-" + column.getLength() + "-" + column.getScale();
 
