@@ -35,7 +35,7 @@ public class MyTypeResolverSolver extends JavaTypeResolverDefaultImpl {
 
     protected FullyQualifiedJavaType calculateBigDecimalReplacement(IntrospectedColumn column, FullyQualifiedJavaType defaultType) {
         FullyQualifiedJavaType answer = super.calculateBigDecimalReplacement(column, defaultType);
-        String tls = column.getJdbcType() + "-" + column.getLength() + "-" + column.getScale();
+        String tls = column.getJdbcType() + "/" + column.getLength() + "/" + column.getScale();
 
         if (properties.containsKey(MAPPER_INTEGER_TYPE)) {
             String typeStr = properties.getProperty(MAPPER_INTEGER_TYPE);
