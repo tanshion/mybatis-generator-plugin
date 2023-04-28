@@ -5,12 +5,16 @@ import org.mybatis.generator.api.IntrospectedTable;
 import org.mybatis.generator.api.dom.java.*;
 import org.mybatis.generator.internal.DefaultCommentGenerator;
 import org.mybatis.generator.internal.util.StringUtility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.Properties;
 import java.util.Set;
 
 public class MyCommentGenerator extends DefaultCommentGenerator {
+    protected static final Logger logger = LoggerFactory.getLogger(MyTypeResolverSolver.class);
+
     private Properties properties = new Properties();
     private boolean suppressDate = false;
     private boolean suppressAllComments = false;
@@ -37,7 +41,27 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
 
     @Override
     public void addClassComment(InnerClass innerClass, IntrospectedTable introspectedTable) {
-        return;
+        if (suppressAllComments) {
+            return;
+        }
+
+        innerClass.addJavaDocLine("/**"); //$NON-NLS-1$
+        String remarks = introspectedTable.getRemarks();
+        String[] remarkLines = remarks.split(System.getProperty("line.separator"));
+        if (remarkLines.length<2){
+            if (remarks.contains("\r\n")) {
+                remarkLines = remarks.split("\r\n");
+            }else if (remarks.contains("\n")) {
+                remarkLines = remarks.split("\n");
+            }else if (remarks.contains("\r")) {
+                remarkLines = remarks.split("\r");
+            }
+        }
+        for (String remarkLine : remarkLines) {
+            innerClass.addJavaDocLine(" * " + remarkLine);
+        }
+        addJavadocTag(innerClass, false);
+        innerClass.addJavaDocLine(" */"); //$NON-NLS-1$
     }
 
     @Override
@@ -47,7 +71,26 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
 
     @Override
     public void addModelClassComment(TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
-        return;
+        if (suppressAllComments  || !addRemarkComments) {
+            return;
+        }
+        String remarks = introspectedTable.getRemarks();
+        logger.info("--->"+remarks);
+        topLevelClass.addJavaDocLine("/**"); //$NON-NLS-1$
+        String[] remarkLines = remarks.split(System.getProperty("line.separator"));
+        if (remarkLines.length<2){
+            if (remarks.contains("\r\n")) {
+                remarkLines = remarks.split("\r\n");
+            }else if (remarks.contains("\n")) {
+                remarkLines = remarks.split("\n");
+            }else if (remarks.contains("\r")) {
+                remarkLines = remarks.split("\r");
+            }
+        }
+        for (String remarkLine : remarkLines) {
+            topLevelClass.addJavaDocLine(" * " + remarkLine);
+        }
+        topLevelClass.addJavaDocLine(" */"); //$NON-NLS-1$
     }
 
     @Override
