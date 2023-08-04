@@ -120,5 +120,11 @@ public class BasePlugin extends PluginAdapter {
         if (StringUtility.stringHasValue(this.getProperties().getProperty(PRO_MYBATIS_VERSION))) {
             this.mybatisVersion = this.getProperties().getProperty(PRO_MYBATIS_VERSION);
         }
+        String lineSeparator = this.getProperties().getProperty("lineSeparator");
+        if (StringUtility.stringHasValue(lineSeparator)) {
+            System.setProperty("line.separator", lineSeparator) ;
+        } else {
+            System.setProperty("line.separator", "\n") ;
+        }
     }
 }
