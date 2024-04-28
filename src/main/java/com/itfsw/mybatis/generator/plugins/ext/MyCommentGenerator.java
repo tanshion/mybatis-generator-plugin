@@ -75,6 +75,9 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
             return;
         }
         String remarks = introspectedTable.getRemarks();
+        if (!StringUtility.stringHasValue(remarks)) {
+            return;
+        }
         logger.info("--->"+remarks);
         topLevelClass.addJavaDocLine("/**"); //$NON-NLS-1$
         String[] remarkLines = remarks.split(System.getProperty("line.separator"));
