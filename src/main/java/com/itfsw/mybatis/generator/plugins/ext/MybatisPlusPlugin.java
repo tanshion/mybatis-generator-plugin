@@ -22,11 +22,12 @@ import org.mybatis.generator.api.dom.java.*;
 import org.mybatis.generator.api.dom.xml.XmlElement;
 import org.mybatis.generator.config.JavaClientGeneratorConfiguration;
 import org.mybatis.generator.config.JavaModelGeneratorConfiguration;
+import org.mybatis.generator.config.SqlMapGeneratorConfiguration;
 import org.mybatis.generator.exception.ShellException;
 import org.mybatis.generator.internal.DefaultShellCallback;
 import org.mybatis.generator.internal.util.StringUtility;
 
-import java.io.File;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,7 +61,10 @@ public class MybatisPlusPlugin extends BasePlugin {
     private String serviceStyle = "simple";//simple pro
     private String generatedService = "false";
     private String generatedSqlMap = "true";
+    private String generatedResultMap = "false";
     private String serviceTargetPackage;
+    private String sqlMapTargetPackage;
+    private String sqlMapTargetProject;
 
     /**
      * 具体执行顺序 http://www.mybatis.org/generator/reference/pluggingIn.html
@@ -75,6 +79,7 @@ public class MybatisPlusPlugin extends BasePlugin {
         baseMapper = this.getProperties().getProperty("baseMapper");
         tableName = this.getProperties().getProperty("tableName");
         tableIdType = this.getProperties().getProperty("tableIdType");
+        generatedResultMap = this.getProperties().getProperty("generatedResultMap");
         keySequence = introspectedTable.getTableConfigurationProperty("keySequence");
         constructorTargetPackage = this.getProperties().getProperty("constructorTargetPackage");
         serviceTargetPackage = this.getProperties().getProperty("serviceTargetPackage");
@@ -89,7 +94,9 @@ public class MybatisPlusPlugin extends BasePlugin {
         JavaClientGeneratorConfiguration javaCliGenCfg = context.getJavaClientGeneratorConfiguration();
         clientTargetProject = javaCliGenCfg.getTargetProject();
         clientTargetPackage = javaCliGenCfg.getTargetPackage();
-
+        SqlMapGeneratorConfiguration sqlMapGenCfg = context.getSqlMapGeneratorConfiguration();
+        sqlMapTargetProject = sqlMapGenCfg.getTargetProject();
+        sqlMapTargetPackage = sqlMapGenCfg.getTargetPackage();
     }
 
 
@@ -137,7 +144,7 @@ public class MybatisPlusPlugin extends BasePlugin {
             topLevelClass.addAnnotation(String.format("@TableName(value = \"%s\")", introspectedTable.getFullyQualifiedTable().getIntrospectedTableName()));
         }
 
-        if (null != keySequence && !"".equals(keySequence)) {
+        if (StringUtility.stringHasValue(keySequence)) {
             topLevelClass.addImportedType("com.baomidou.mybatisplus.annotation.KeySequence");
             topLevelClass.addAnnotation(String.format("@KeySequence(value = \"%s\")", keySequence));
         }
@@ -145,7 +152,7 @@ public class MybatisPlusPlugin extends BasePlugin {
 
     @Override
     public boolean sqlMapGenerated(GeneratedXmlFile sqlMap,
-            IntrospectedTable introspectedTable) {
+                                   IntrospectedTable introspectedTable) {
         if (StringUtility.stringHasValue(generatedService) && !"false".equals(generatedService)) {
             return true;
         } else {
@@ -156,6 +163,7 @@ public class MybatisPlusPlugin extends BasePlugin {
     @Override
     public boolean clientGenerated(Interface interfaze, TopLevelClass topLevelClass, IntrospectedTable introspectedTable) {
         GeneratedJavaFile javaFile = new GeneratedJavaFile(interfaze, clientTargetProject, javaFormatter);
+        javaFile.isMergeable();
         FullyQualifiedTable fullyQualifiedTable = introspectedTable.getFullyQualifiedTable();
         // 添加泛型支持
         FullyQualifiedJavaType daoSuperType = new FullyQualifiedJavaType(baseMapper);
@@ -164,10 +172,96 @@ public class MybatisPlusPlugin extends BasePlugin {
         interfaze.addImportedType(modelJavaType);
         daoSuperType.addTypeArgument(modelJavaType);
         interfaze.addSuperInterface(new FullyQualifiedJavaType(daoSuperType.getShortName()));
+
+        //生成@Results
+        List<IntrospectedColumn> primaryKeyColumns = introspectedTable.getPrimaryKeyColumns();
+        IntrospectedColumn primaryKeyColumn = primaryKeyColumns.get(0);
+        String tableName = introspectedTable.getFullyQualifiedTable().getIntrospectedTableName();
+        List<IntrospectedColumn> allColumns = introspectedTable.getAllColumns();
+        Method method = new Method("select" + modelJavaType.getShortName());
+        String selectStr = "@Select(\"select * from " + tableName + " where " + primaryKeyColumn.getActualColumnName() + " = #{" + primaryKeyColumn.getJavaProperty() + "}\")";
+        String methodStr = modelJavaType.getShortName() + " " + method.getName();
+        StringBuilder resultsCode = new StringBuilder();
+        if ("true".equals(generatedResultMap)) {
+            resultsCode.append("@Results(id = \"BaseResultMap\"").append(", value = {\n");
+            for (IntrospectedColumn column : allColumns) {
+                String javaProperty = column.getJavaProperty();
+                String actualColumnName = column.getActualColumnName();
+                resultsCode.append("        @Result(property = \"").append(javaProperty).append("\", column = \"").append(actualColumnName).append("\"),\n");
+            }
+            resultsCode.append("    })");
+            interfaze.addImportedType(new FullyQualifiedJavaType("org.apache.ibatis.annotations.Result"));
+            interfaze.addImportedType(new FullyQualifiedJavaType("org.apache.ibatis.annotations.Results"));
+            interfaze.addImportedType(new FullyQualifiedJavaType("org.apache.ibatis.annotations.Select"));
+
+            method.setReturnType(modelJavaType);
+            method.addParameter(new Parameter(primaryKeyColumn.getFullyQualifiedJavaType(), primaryKeyColumn.getJavaProperty()));
+
+            method.addAnnotation(selectStr);
+            method.addAnnotation(resultsCode.toString());
+            interfaze.addMethod(method);
+        }
         if (fileExists(javaFile)) {
+            try {
+                if ("true".equals(generatedResultMap)) {
+                    File fileDir = shellCallback.getDirectory(javaFile.getTargetProject(), javaFile.getTargetPackage());
+                    File file = new File(fileDir, javaFile.getFileName());
+                    // 读取文件内容
+                    String fileContent = readFileContent(file);
+                    //替换 selectStr 到 methodName 之间内容替换为 resultsCode
+                    int start = fileContent.indexOf(selectStr);
+                    if (start > 0){
+                        start += selectStr.length();
+                    }
+                    int end = fileContent.indexOf(methodStr);
+                    resultsCode.insert(0, "\n    ");
+                    resultsCode.append("\n    ");
+                    if (start > 0 && end > 0) {
+                        String oldContent = fileContent.substring(start, end);
+                        // 将手写代码与新生成的代码合并
+                        String newFileContent = fileContent.replace(oldContent, resultsCode.toString());
+                        // 写入新文件内容
+                        writeFileContent(file, newFileContent);
+                    }
+//                    else if (!fileContent.contains("BaseResultMap")) {
+//                        String baseMapperStr = "BaseMapper<" + modelJavaType.getShortName() + "> {";
+//                        int start2 = fileContent.indexOf(baseMapperStr) + baseMapperStr.length();
+//                        StringBuilder builderContent = new StringBuilder(fileContent);
+//                        // 将手写代码与新生成的代码合并
+//                        resultsCode.append(modelJavaType.getShortName()).append(" ").append(method.getName())
+//                                .append("(").append(")")
+//                        builderContent.insert(start2, resultsCode);
+//                        // 写入新文件内容
+//                        writeFileContent(file, builderContent.toString());
+//                    }
+                }
+            } catch (Exception e) {
+                logger.info("异常", e);
+            }
             return false;
         }
         return super.clientGenerated(interfaze, topLevelClass, introspectedTable);
+    }
+
+    private String readFileContent(File file) throws IOException {
+        StringBuilder content = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+        }
+        // 删除最后一个换行符
+        if (content.length() > 0) {
+            content.deleteCharAt(content.length() - 1);
+        }
+        return content.toString();
+    }
+
+    private void writeFileContent(File file, String content) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            writer.write(content);
+        }
     }
 
     private FullyQualifiedJavaType getModelJavaType(FullyQualifiedTable fullyQualifiedTable) {
@@ -234,7 +328,7 @@ public class MybatisPlusPlugin extends BasePlugin {
             // 文件不存在
             return file.exists();
         } catch (ShellException e) {
-            e.printStackTrace();
+            logger.error("异常", e);
         }
         return true;
     }

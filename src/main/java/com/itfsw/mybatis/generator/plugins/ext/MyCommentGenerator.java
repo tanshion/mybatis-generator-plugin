@@ -79,6 +79,7 @@ public class MyCommentGenerator extends DefaultCommentGenerator {
             return;
         }
         logger.info("--->"+remarks);
+        topLevelClass.addJavaDocLine("//禁止修改此实体类代码,会被工具生成的代码覆盖");
         topLevelClass.addJavaDocLine("/**"); //$NON-NLS-1$
         String[] remarkLines = remarks.split(System.getProperty("line.separator"));
         if (remarkLines.length<2){
